@@ -7,6 +7,8 @@
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+import { createPeople } from './store3d-people.js';
 
 export const ZONES = {
   bar_counter: 'Bar counter (dinding hijau)',
@@ -22,9 +24,33 @@ export const ZONES = {
 };
 
 const W = 12, D = 10, H = 3.2;           // ukuran ruangan (x, z, tinggi)
+// Papan logo di green wall: rasio 2,4 : 1 mengikuti logo Interport (horizontal, ± 2,8 : 1)
+// dengan bantalan putih di sekelilingnya.
+const LOGO = { w: 2.4, h: 1.0, x: -W / 2 + 0.15, y: 2.05, z: 1.1 };
+function addLogo(scene, url) {
+  if (!url) return;
+  const PX = 1000;                                   // lebar elemen dalam px -> 1 px = LOGO.w / PX meter
+  const el = document.createElement('div');
+  el.className = 's3d-logo';
+  el.style.width = PX + 'px';
+  el.style.height = Math.round(PX * LOGO.h / LOGO.w) + 'px';
+  const img = document.createElement('img');
+  img.alt = 'Interport';
+  img.decoding = 'async';
+  img.onload = () => el.classList.add('ready');
+  img.onerror = () => el.remove();                   // gagal -> teks cadangan di WebGL tetap tampil
+  img.src = url;
+  el.appendChild(img);
+  const obj = new CSS3DObject(el);
+  obj.position.set(LOGO.x + 0.012, LOGO.y, LOGO.z);
+  obj.rotation.y = Math.PI / 2;
+  obj.scale.setScalar(LOGO.w / PX);
+  scene.add(obj);
+}
+
 const HOME = { pos: new THREE.Vector3(13, 11.2, 13), target: new THREE.Vector3(0, 0.9, 0) };
 
-export function createStore3D(container, { settings = {}, categories = [], products = [], onSelect } = {}) {
+export function createStore3D(container, { settings = {}, categories = [], products = [], onSelect, logoUrl = '' } = {}) {
   // ---------- renderer, scene, kamera ----------
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -34,6 +60,11 @@ export function createStore3D(container, { settings = {}, categories = [], produ
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   container.prepend(renderer.domElement);
+  // Lapisan CSS3D: logo Interport dipasang sebagai <img> biasa yang diproyeksikan 3D,
+  // sehingga URL logo dari domain mana pun bisa dipakai tanpa syarat CORS WebGL.
+  const cssRenderer = new CSS3DRenderer();
+  cssRenderer.domElement.className = 's3d-css';
+  renderer.domElement.after(cssRenderer.domElement);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 200);
@@ -74,9 +105,10 @@ export function createStore3D(container, { settings = {}, categories = [], produ
   buildRoom(root, M, settings);
   buildStaticDecor(root, M);
   buildZones();
+  addLogo(scene, logoUrl);
 
   // ---------- data dinamis ----------
-  let cats = categories, prods = products;
+  let cats = categories, prods = products, latestStats = {};
   function zoneStats() {
     const stats = {};
     Object.keys(ZONES).forEach((z) => (stats[z] = { cats: [], available: 0, total: 0, items: [] }));
@@ -92,6 +124,7 @@ export function createStore3D(container, { settings = {}, categories = [], produ
 
   function populate() {
     const stats = zoneStats();
+    latestStats = stats;
     Object.entries(zones).forEach(([name, z]) => {
       z.dynamic.clear();
       const st = stats[name];
@@ -175,6 +208,7 @@ export function createStore3D(container, { settings = {}, categories = [], produ
   function resize() {
     const w = container.clientWidth || 800, h = container.clientHeight || 450;
     renderer.setSize(w, h, false);
+    cssRenderer.setSize(w, h);
     camera.aspect = w / h;
     camera.fov = w / h < 1.1 ? 42 : 30;
     camera.updateProjectionMatrix();
@@ -186,7 +220,7 @@ export function createStore3D(container, { settings = {}, categories = [], produ
   function loop() {
     raf = 0;
     if (!visible || document.hidden) return;
-    clock.update(); const t = clock.getElapsed();
+    clock.update(); const t = clock.getElapsed(); const dt = clock.getDelta();
     if (tween) {
       const k = Math.min(1, (performance.now() - tween.t0) / tween.ms);
       const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
@@ -199,11 +233,17 @@ export function createStore3D(container, { settings = {}, categories = [], produ
       z.ring.material.opacity += ((on ? 0.55 : 0) - z.ring.material.opacity) * 0.15;
       if (z.label) z.label.position.y = z.anchor.y + Math.sin(t * 1.6 + z.anchor.x) * 0.06 + (on ? 0.15 : 0);
     });
+    people?.update(dt, t);
     controls.update();
     renderer.render(scene, camera);
+    cssRenderer.render(scene, camera);
     raf = requestAnimationFrame(loop);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !raf) loop(); });
+  // animasi penjual & pembeli (dimatikan jika admin set enable_3d_people = 0 atau pengguna memilih reduced motion)
+  const people = String(settings.enable_3d_people ?? '1') !== '0' && !matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? createPeople({ root, camera, container, getStats: () => latestStats, getCategories: () => cats })
+    : null;
   loop();
 
   // ---------- zona ----------
@@ -216,7 +256,7 @@ export function createStore3D(container, { settings = {}, categories = [], produ
       table_center: { pos: [0.6, 0, 0.6], rotY: 0, hit: [2.6, 1.3, 1.6], anchor: [0.6, 2.0, 0.6], ring: 1.9 },
       shelf_toys: { pos: [3.3, 0, -1.0], rotY: -Math.PI / 2, hit: [2.2, 1.6, 0.7], anchor: [3.3, 2.3, -1.0], ring: 1.5 },
       kitchen: { pos: [0.9, 0, -4.55], rotY: 0, hit: [4.6, 2.9, 0.9], anchor: [0.9, 3.4, -4.3], ring: 2.4 },
-      bar_counter: { pos: [-5.25, 0, 0.8], rotY: Math.PI / 2, hit: [5.0, 1.4, 1.6], anchor: [-4.9, 2.1, 0.8], ring: 2.6 },
+      bar_counter: { pos: [-5.25, 0, 0.8], rotY: Math.PI / 2, hit: [5.0, 1.4, 1.6], anchor: [-4.7, 1.9, -0.9], ring: 2.6 },
       sign_board: { pos: [2.3, 0, -2.2], rotY: -0.5, hit: [1.0, 1.7, 0.6], anchor: [2.3, 2.3, -2.2], ring: 0.8 },
       floor_corner: { pos: [4.4, 0, 3.6], rotY: -0.8, hit: [1.6, 1.4, 1.2], anchor: [4.4, 1.9, 3.6], ring: 1.2 }
     };
@@ -259,7 +299,7 @@ export function createStore3D(container, { settings = {}, categories = [], produ
         setTimeout(() => { if (hovered === c.zone) hovered = null; }, 1800);
       }
     },
-    dispose() { cancelAnimationFrame(raf); io.disconnect(); ro.disconnect(); renderer.dispose(); container.removeChild(renderer.domElement); tip.remove(); }
+    dispose() { cancelAnimationFrame(raf); io.disconnect(); ro.disconnect(); people?.dispose(); renderer.dispose(); renderer.domElement.remove(); cssRenderer.domElement.remove(); tip.remove(); }
   };
 }
 
@@ -323,10 +363,10 @@ function materials(settings) {
     }
   });
 
-  const logoTex = canvasTex(1024, 512, (g, w, h) => {
+  const logoTex = canvasTex(1200, 500, (g, w, h) => {
     g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
     g.lineWidth = 22; g.lineCap = 'round';
-    const wave = (color, off) => { g.strokeStyle = color; g.beginPath(); for (let x = 0; x <= 360; x += 6) { const y = 170 + Math.sin((x / 360) * Math.PI * 2 + off) * 38 - x * 0.12; x === 0 ? g.moveTo(330 + x, y) : g.lineTo(330 + x, y); } g.stroke(); };
+    const wave = (color, off) => { g.strokeStyle = color; g.beginPath(); for (let x = 0; x <= 360; x += 6) { const y = 170 + Math.sin((x / 360) * Math.PI * 2 + off) * 38 - x * 0.12; x === 0 ? g.moveTo(420 + x, y) : g.lineTo(420 + x, y); } g.stroke(); };
     wave('#1f9d55', 0); wave('#1d4ed8', 1.2);
     g.fillStyle = '#1d4ed8';
     g.font = '800 150px "Plus Jakarta Sans", sans-serif';
@@ -492,26 +532,13 @@ function buildRoom(root, M, settings) {
   green.position.set(-W / 2 + 0.07, (H - 0.35) / 2 + 0.02, 0.9);
   green.receiveShadow = true;
   root.add(green);
-  const logo = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2), M.logo);
+  // papan logo: teks cadangan di WebGL, ditimpa <img> logo asli lewat CSS3D (lihat addLogo)
+  const logo = new THREE.Mesh(new THREE.PlaneGeometry(LOGO.w, LOGO.h), M.logo);
   logo.rotation.y = Math.PI / 2;
-  logo.position.set(-W / 2 + 0.14, 2.05, 1.1);
+  logo.position.set(LOGO.x, LOGO.y, LOGO.z);
   root.add(logo);
-  // logo dari URL (jika server gambar mengizinkan CORS), fallback tetap teks
-  if (settings.logo_url) {
-    const loader = new THREE.TextureLoader();
-    loader.setCrossOrigin('anonymous');
-    loader.load(settings.logo_url, (tex) => {
-      tex.colorSpace = THREE.SRGBColorSpace;
-      const img = tex.image;
-      const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
-      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 1024, 512);
-      const s = Math.min(860 / img.width, 360 / img.height);
-      g.drawImage(img, (1024 - img.width * s) / 2, (512 - img.height * s) / 2, img.width * s, img.height * s);
-      try { c.toDataURL(); } catch { return; }            // tainted -> pakai teks
-      const t2 = new THREE.CanvasTexture(c); t2.colorSpace = THREE.SRGBColorSpace;
-      M.logo.map = t2; M.logo.needsUpdate = true;
-    }, undefined, () => {});
-  }
+  const frame = box(root, 0.04, LOGO.h + 0.08, LOGO.w + 0.08, M.woodDark, LOGO.x - 0.03, LOGO.y, LOGO.z, false);
+  frame.castShadow = false;
   // lampu sorot kecil di atas green wall
   for (let i = 0; i < 5; i++) {
     const z = -1.5 + i * 1.2;
@@ -530,7 +557,7 @@ function buildRoom(root, M, settings) {
   rod(root, [gx + 0.12, 1.0, -3.2], [gx + 0.12, 1.8, -3.2], 0.02, M.metal);
 
   // lampu gantung
-  [[-0.6, -1.8], [2.4, -2.6]].forEach(([x, z]) => {
+  [[-0.1, 0.6], [2.4, -2.6]].forEach(([x, z]) => {
     rod(root, [x, H, z], [x, H - 0.9, z], 0.01, M.black);
     const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.42, 0.34, 28, 1, true), M.black);
     shade.material = M.black; shade.position.set(x, H - 1.05, z); shade.castShadow = true; root.add(shade);

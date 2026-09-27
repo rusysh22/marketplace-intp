@@ -582,7 +582,7 @@ const SETTING_GROUPS = [
     { k: 'admin_whatsapp', label: 'WhatsApp admin (format 62…)' }, { k: 'pickup_info', label: 'Info pengambilan barang', type: 'textarea', span: 'span-all' }]],
   ['Tampilan', [
     { k: 'enable_3d', label: 'Tampilkan toko 3D', type: 'check' }, { k: 'theme_effects', label: 'Latar pelangi & kembang api', type: 'check' },
-    { k: 'auto_scroll', label: 'Gulir otomatis (mode layar TV)', type: 'check' }, { k: 'logo_text', label: 'Teks logo di dinding 3D' },
+    { k: 'auto_scroll', label: 'Gulir otomatis (mode layar TV)', type: 'check' }, { k: 'enable_3d_people', label: 'Animasi penjual & pembeli di toko 3D', type: 'check' }, { k: 'logo_text', label: 'Teks logo di dinding 3D' },
     { k: 'sign_text', label: 'Tulisan papan tulis 3D', type: 'textarea' }]],
   ['Penjualan', [
     { k: 'product_code_prefix', label: 'Prefix kode barang' }, { k: 'next_submission_no', label: 'No. form berikutnya', type: 'number' },

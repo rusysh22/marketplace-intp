@@ -30,17 +30,15 @@
         <div><span class="brand-kicker" id="brand-kicker">Compassion Market</span><h1 id="title">Katalog barang</h1></div>
         <div class="brand-cta">
           <button class="btn btn-ghost" type="button" id="toggle-3d" hidden>🧊 Toko 3D</button>
-          <a class="btn btn-primary" href="sell.html">+ Jual barang</a>
         </div>
       </div>
     <section class="store3d-section" id="store3d-section" hidden aria-label="Toko 3D interaktif">
       <div class="store3d-card" id="store3d">
         <div class="store3d-overlay">
-          <div class="title"><strong>Jelajahi toko 3D</strong><span>Klik rak / meja untuk melihat kategorinya · seret untuk memutar · scroll untuk zoom</span></div>
+          <div class="title"><strong>Jelajahi toko 3D</strong><span>Klik rak / meja untuk memfilter katalog · seret untuk memutar · scroll untuk zoom</span></div>
           <div class="ctrls"><button class="btn btn-ghost btn-sm" type="button" id="s3d-reset">⟲ Reset</button></div>
         </div>
       </div>
-      <div class="store3d-legend" id="store3d-legend"></div>
     </section>
       <div class="payment" id="payment" aria-labelledby="payment-title" hidden></div>
     </header>
@@ -55,7 +53,7 @@
             <label class="search-box"><input type="search" id="search" placeholder="Cari barang / kode / penjual" aria-label="Cari barang"></label>
             <div class="sorter"><label for="sort-products">Urutkan</label>
               <select id="sort-products">
-                <option value="default">Tersedia dulu</option>
+                <option value="default">Rekomendasi</option>
                 <option value="newest">Terbaru</option>
                 <option value="price-up">Harga: terendah</option>
                 <option value="price-down">Harga: tertinggi</option>
@@ -64,7 +62,8 @@
                 <option value="listed">Urutan katalog</option>
               </select>
             </div>
-            <button id="print-all" class="print-all" type="button">▣ Cetak semua label</button>
+            <label class="sold-toggle" id="show-sold-label" hidden><input type="checkbox" id="show-sold"><span>Tampilkan yang terjual (<span id="show-sold-count">0</span>)</span></label>
+            <button id="print-all" class="print-all" type="button" hidden title="Khusus admin: cetak label harga barang yang sedang tampil">▣ Cetak label</button>
             <div class="views" role="group" aria-label="Tampilan katalog">
               <button type="button" data-view="grid" class="active">▦ Grid</button>
               <button type="button" data-view="list">☷ List</button>

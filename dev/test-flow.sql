@@ -1,9 +1,11 @@
 -- Uji alur bisnis end-to-end (lokal). Jalankan: npm run test:sql
 \set ON_ERROR_STOP 1
 begin;
+-- karyawan: profil tanpa akun login (dibuat admin); admin: akun Supabase Auth
+insert into public.profiles (id, email, name, emp_id) values
+  ('11111111-1111-1111-1111-111111111111', 'seller@interport.co.id', 'Sari Penjual', 'E001'),
+  ('22222222-2222-2222-2222-222222222222', 'buyer@interport.co.id', 'Budi Pembeli', null);
 insert into auth.users (id, email, raw_user_meta_data) values
-  ('11111111-1111-1111-1111-111111111111', 'seller@interport.co.id', '{"name":"Sari Penjual","emp_id":"E001"}'),
-  ('22222222-2222-2222-2222-222222222222', 'buyer@interport.co.id', '{"name":"Budi Pembeli"}'),
   ('33333333-3333-3333-3333-333333333333', 'admin@interport.co.id', '{"name":"Admin CM"}');
 update public.profiles set role = 'admin' where id = '33333333-3333-3333-3333-333333333333';
 
@@ -21,18 +23,20 @@ end $$;
 grant execute on all functions in schema pg_temp to anon, authenticated;
 
 -- 1) Penjual mengajukan 2 barang
-select pg_temp.act('11111111-1111-1111-1111-111111111111');
-select public.submit_items('[
+select pg_temp.act(null);
+select public.submit_items('11111111-1111-1111-1111-111111111111', '[
   {"name":"Jaket Uniqlo","category_id":9,"size":"L","condition_pct":85,"price":150000,"original_price":250000,"stock":1,
    "summary":"Jaket parka","condition_note":"Ada noda kecil","images":["11111111-1111-1111-1111-111111111111/a.jpg"]},
   {"name":"Mouse Logitech","category_id":1,"condition_pct":95,"price":100000,"stock":2,
    "images":["11111111-1111-1111-1111-111111111111/b.jpg","11111111-1111-1111-1111-111111111111/c.jpg"]}
 ]'::jsonb, 'Form uji') as submit;
-select code, status, seller_name from public.products where seller_id = auth.uid() order by code;
+reset role;
+select code, status, seller_name, donation_amount from public.products where seller_id = '11111111-1111-1111-1111-111111111111' order by code;
+select pg_temp.act(null);
 
 -- Foto milik orang lain ditolak
 do $$ begin
-  perform public.submit_items('[{"name":"X","category_id":1,"condition_pct":90,"price":1,"images":["22222222-2222-2222-2222-222222222222/x.jpg"]}]');
+  perform public.submit_items('11111111-1111-1111-1111-111111111111', '[{"name":"X","category_id":1,"condition_pct":90,"price":1,"images":["22222222-2222-2222-2222-222222222222/x.jpg"]}]');
   raise exception 'SEHARUSNYA GAGAL';
 exception when others then
   if sqlerrm = 'SEHARUSNYA GAGAL' then raise; end if;
@@ -47,8 +51,8 @@ update public.products set price = 1;   -- RLS: 0 baris
 reset role;
 select count(*) as price_one_rows from public.products where price = 1;
 
--- Penjual tidak bisa approve sendiri
-select pg_temp.act('11111111-1111-1111-1111-111111111111');
+-- Karyawan (tanpa sesi admin) tidak bisa approve
+select pg_temp.act(null);
 do $$ begin
   perform public.admin_review_product((select id from public.products where code = 'CM-26-1'), 'approve');
   raise exception 'SEHARUSNYA GAGAL';
@@ -69,18 +73,20 @@ select public.admin_dashboard() ->> 'pending_products' as pending_after_review;
 
 -- 4) Pembeli checkout: 1 jaket + 1 mouse (flash)
 reset role;
-select pg_temp.act('22222222-2222-2222-2222-222222222222');
+select pg_temp.act(null);
 select code, effective_price, flash_active from public.catalog where code like 'CM-26-%' order by code;
-select public.create_order(jsonb_build_array(
+select public.create_order('22222222-2222-2222-2222-222222222222', jsonb_build_array(
   jsonb_build_object('product_id', (select id from public.products where code = 'CM-26-1'), 'qty', 1),
   jsonb_build_object('product_id', (select id from public.products where code = 'CM-26-2'), 'qty', 1)),
   (select id from public.payment_methods where name = 'Transfer BCA'), 'Ambil jam 12') as order_result;
+reset role;
 select code, status, subtotal, unique_code between 1 and 299 as has_unique, total = subtotal + unique_code as total_ok from public.orders;
 select code, price, normal_price, flash_item_id is not null as flash from public.order_items order by code;
+select pg_temp.act(null);
 
 -- stok habis -> order kedua gagal
 do $$ begin
-  perform public.create_order(jsonb_build_array(jsonb_build_object('product_id', (select id from public.catalog where code = 'CM-26-1'), 'qty', 1)), 2, null);
+  perform public.create_order('22222222-2222-2222-2222-222222222222', jsonb_build_array(jsonb_build_object('product_id', (select id from public.catalog where code = 'CM-26-1'), 'qty', 1)), 2, null);
   raise exception 'SEHARUSNYA GAGAL';
 exception when others then
   if sqlerrm = 'SEHARUSNYA GAGAL' then raise; end if;
@@ -88,7 +94,10 @@ exception when others then
 end $$;
 
 -- 5) Upload bukti, admin verifikasi, siap diambil, selesai, payout
-select public.submit_payment_proof((select max(id) from public.orders), '22222222-2222-2222-2222-222222222222/proof.jpg');
+reset role;
+select max(id) as oid from public.orders \gset
+select pg_temp.act(null);
+select public.submit_payment_proof('22222222-2222-2222-2222-222222222222', :oid, '22222222-2222-2222-2222-222222222222/proof.jpg');
 reset role;
 select pg_temp.act('33333333-3333-3333-3333-333333333333');
 select public.admin_verify_payment((select max(id) from public.orders), true, 'Mutasi cocok');
@@ -98,13 +107,14 @@ select public.admin_mark_payout(array(select id from public.order_items), 'TRF-0
 
 -- penjual lihat penjualannya
 reset role;
-select pg_temp.act('11111111-1111-1111-1111-111111111111');
-select code, order_status, payout_status, payout_amount from public.my_sales order by code;
+select pg_temp.act(null);
+select x ->> 'code' as code, x ->> 'order_status' as order_status, x ->> 'payout_status' as payout_status, x ->> 'payout_amount' as payout_amount
+from jsonb_array_elements(public.my_sales('11111111-1111-1111-1111-111111111111')) x order by 1;
 
 -- 6) Order kedaluwarsa mengembalikan stok
 reset role;
-select pg_temp.act('22222222-2222-2222-2222-222222222222');
-select public.create_order(jsonb_build_array(jsonb_build_object('product_id', (select id from public.products where code = 'CM-26-2'), 'qty', 1)),
+select pg_temp.act(null);
+select public.create_order('22222222-2222-2222-2222-222222222222', jsonb_build_array(jsonb_build_object('product_id', (select id from public.products where code = 'CM-26-2'), 'qty', 1)),
   (select id from public.payment_methods where name = 'Transfer Mandiri')) ->> 'code' as order2;
 reset role;
 select code, stock from public.products where code = 'CM-26-2';

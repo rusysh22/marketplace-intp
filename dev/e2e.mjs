@@ -40,48 +40,71 @@ const shot = async (page, n) => {
 const step = (m) => console.log('•', m);
 const expectToast = async (page, re) => { await page.locator('.toast', { hasText: re }).first().waitFor({ timeout: 15000 }); };
 
-async function register(page, { name, email, dept }) {
-  await page.goto(BASE + '/login.html');
-  await page.click('[data-tab=register]');
-  const f = page.locator('#form-register');
-  await f.locator('[name=name]').fill(name);
-  await f.locator('[name=department]').fill(dept);
-  await f.locator('[name=phone]').fill('081234567890');
-  await f.locator('[name=email]').fill(email);
-  await f.locator('[name=password]').fill('rahasia123');
-  await f.locator('button[type=submit]').click();
-  await page.waitForURL(/index\.html/);
+// Admin: akun Supabase Auth (di produksi dibuat lewat Dashboard -> Authentication)
+async function createAdmin(email, name) {
+  const r = await fetch(BASE + '/auth/v1/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: 'rahasia123', data: { name } }) });
+  if (!r.ok) throw new Error('Gagal membuat akun admin: ' + (await r.text()));
+  await db.query("update profiles set role = 'admin' where email = $1", [email]);
 }
-async function login(page, email) {
+async function adminLogin(page, email) {
+  await page.goto(BASE + '/login.html?next=admin.html');
+  await page.fill('#form-admin [name=email]', email);
+  await page.fill('#form-admin [name=password]', 'rahasia123');
+  await page.click('#form-admin button[type=submit]');
+  await page.waitForURL((u) => u.pathname.endsWith('/admin.html'));
+}
+// Karyawan: dibuat admin lewat menu Pengguna, lalu "pilih identitas" tanpa password
+async function addEmployee(admin, name, dept) {
+  await admin.goto(BASE + '/admin.html#users');
+  await admin.click('[data-add-employee]');
+  const m = admin.locator('.modal');
+  await m.locator('[name=name]').fill(name);
+  await m.locator('[name=department]').fill(dept);
+  await m.locator('[name=phone]').fill('081234567890');
+  await m.locator('button', { hasText: 'Tambah' }).click();
+  await expectToast(admin, /Karyawan ditambahkan/);
+}
+async function pickIdentity(page, name) {
   await page.goto(BASE + '/login.html');
-  await page.fill('#form-login [name=email]', email);
-  await page.fill('#form-login [name=password]', 'rahasia123');
-  await page.click('#form-login button[type=submit]');
-  await page.waitForURL(/index\.html/);
+  await page.fill('#q', name);
+  await page.locator('#emp-list [data-id]', { hasText: name }).first().click();
+  await page.waitForURL((u) => u.pathname.endsWith('/index.html'));
 }
 
 try {
   // ---------- admin ----------
   const admin = await newPage('admin');
-  await register(admin, { name: 'Admin Market', email: 'admin@interport.co.id', dept: 'GA' });
-  await db.query("update profiles set role = 'admin' where email = 'admin@interport.co.id'");
-  step('admin terdaftar & dipromosikan');
+  await createAdmin('admin@interport.co.id', 'Admin Market');
+  await adminLogin(admin, 'admin@interport.co.id');
+  await addEmployee(admin, 'Sari Penjual', 'Finance');
+  await addEmployee(admin, 'Budi Pembeli', 'Ops');
+  step('admin login & mendaftarkan 2 karyawan');
 
   // ---------- katalog awal ----------
   const guest = await newPage('guest');
   await guest.goto(BASE + '/');
   await guest.waitForSelector('.card');
   const cards = await guest.locator('.card').count();
-  if (cards !== 31) throw new Error('Katalog awal harus 31 kartu, dapat ' + cards);
+  if (cards !== 15 || await guest.locator('.card.sold').count()) throw new Error('Default hanya 15 barang tersedia (terjual disembunyikan), dapat ' + cards);
+  await guest.check('#show-sold');
+  if (await guest.locator('.card').count() !== 31) throw new Error('Toggle "Tampilkan yang terjual" harus menampilkan 31 barang');
+  await guest.uncheck('#show-sold');
+  if (await guest.locator('#print-all').isVisible()) throw new Error('Tombol cetak label hanya untuk admin');
+  // animasi 3D: percepat waktu sampai muncul bubble percakapan
+  await guest.evaluate(() => { window.__s3dTimeScale = 30; });
+  await guest.locator('.s3d-bubble').first().waitFor({ timeout: 90000 });
+  await guest.evaluate(() => { window.__s3dTimeScale = 1; });
+  if (!(await guest.locator('.s3d-logo').count())) throw new Error('Logo 3D tidak dipasang');
   await guest.waitForTimeout(3000);
   await shot(guest, '01-katalog');
-  step(`katalog tampil ${cards} barang`);
+  step(`katalog: ${cards} barang tersedia (terjual disembunyikan, bisa ditampilkan), animasi 3D & bubble berjalan`);
   // gulir otomatis (mode layar TV) dimatikan agar klik uji stabil
   await db.query("update settings set value = '0' where key in ('auto_scroll', 'theme_effects')");
 
   // ---------- penjual ----------
   const seller = await newPage('seller');
-  await register(seller, { name: 'Sari Penjual', email: 'sari@interport.co.id', dept: 'Finance' });
+  await pickIdentity(seller, 'Sari Penjual');
   await seller.goto(BASE + '/sell.html');
   const png = await guest.screenshot({ clip: { x: 300, y: 300, width: 400, height: 300 } });
   const fillItem = async (i, it) => {
@@ -116,7 +139,7 @@ try {
   await first.locator('[data-approve]').click();
   await expectToast(admin, /ditayangkan/);
   await admin.locator('.review-card').first().locator('[data-approve]').click();
-  await expectToast(admin, /ditayangkan/);
+  await admin.waitForFunction(() => !document.querySelector('.review-card'));
   step('admin menyetujui 2 barang (harga jaket dikoreksi)');
 
   // flash sale lewat UI
@@ -133,7 +156,7 @@ try {
   await admin.locator('[data-add]').first().click();
   const am = admin.locator('.modal');
   await am.locator('[data-q]').fill('sony');
-  await am.locator('tbody tr:not([hidden]) input[type=checkbox]').first().check();
+  await am.locator('tbody tr:not([hidden])', { hasText: 'Sony' }).locator('input[type=checkbox]').check();
   await am.locator('button', { hasText: 'Tambahkan' }).click();
   await expectToast(admin, /ditambahkan/);
   await shot(admin, '05-admin-flash-sale');
@@ -141,7 +164,7 @@ try {
 
   // ---------- pembeli ----------
   const buyer = await newPage('buyer');
-  await register(buyer, { name: 'Budi Pembeli', email: 'budi@interport.co.id', dept: 'Ops' });
+  await pickIdentity(buyer, 'Budi Pembeli');
   await buyer.waitForSelector('.card');
   await buyer.fill('#search', 'sony');
   const sony = buyer.locator('.card', { hasText: 'Sony' });
@@ -173,7 +196,10 @@ try {
 
   // stok berkurang di katalog
   await guest.reload();
+  await guest.waitForSelector('.card');
   await guest.fill('#search', 'sony');
+  if (await guest.locator('.card', { hasText: 'Sony' }).count()) throw new Error('Barang yang stoknya habis seharusnya tersembunyi');
+  await guest.check('#show-sold');
   await guest.locator('.card.sold', { hasText: 'Sony' }).waitFor();
   step('stok barang terkunci (tampil OUT OF STOCK untuk pengunjung)');
 
