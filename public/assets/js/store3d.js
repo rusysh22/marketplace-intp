@@ -329,7 +329,7 @@ function materials(settings) {
     const wave = (color, off) => { g.strokeStyle = color; g.beginPath(); for (let x = 0; x <= 360; x += 6) { const y = 170 + Math.sin((x / 360) * Math.PI * 2 + off) * 38 - x * 0.12; x === 0 ? g.moveTo(330 + x, y) : g.lineTo(330 + x, y); } g.stroke(); };
     wave('#1f9d55', 0); wave('#1d4ed8', 1.2);
     g.fillStyle = '#1d4ed8';
-    g.font = '800 150px "Plus Jakarta Sans", Arial, sans-serif';
+    g.font = '800 150px "Plus Jakarta Sans", sans-serif';
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(settings.logo_text || 'interport', w / 2, 340);
   });
@@ -338,7 +338,7 @@ function materials(settings) {
     g.fillStyle = '#1b1b1b'; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#6b4a2b'; g.lineWidth = 26; g.strokeRect(0, 0, w, h);
     g.fillStyle = '#f5f5f0';
-    g.font = '600 74px "Comic Sans MS", "Segoe Print", cursive';
+    g.font = 'italic 700 70px "Plus Jakarta Sans", sans-serif';
     g.textAlign = 'center';
     const lines = String(settings.sign_text || 'Good Items\nBrighter Stories').split(/\n|\\n/).flatMap((l) => l.split(' ')).slice(0, 6);
     lines.forEach((l, i) => g.fillText(l, w / 2, 140 + i * 100));
@@ -432,7 +432,7 @@ function garmentGeo(kind) {
 function labelSprite(title, sub) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
-  const font = '800 44px "Plus Jakarta Sans", Arial, sans-serif';
+  const font = '800 44px "Plus Jakarta Sans", sans-serif';
   g.font = font;
   const w = Math.min(1000, Math.max(g.measureText(title).width, 260) + 60), h = 124;
   c.width = w; c.height = h;
@@ -440,7 +440,7 @@ function labelSprite(title, sub) {
   const r = 26;
   g.beginPath(); g.moveTo(r, 0); g.arcTo(w, 0, w, h, r); g.arcTo(w, h, 0, h, r); g.arcTo(0, h, 0, 0, r); g.arcTo(0, 0, w, 0, r); g.fill();
   g.fillStyle = '#fff'; g.font = font; g.textBaseline = 'top'; g.fillText(title, 30, 14, w - 60);
-  g.fillStyle = '#a5e9d4'; g.font = '700 32px "Plus Jakarta Sans", Arial, sans-serif'; g.fillText(sub, 30, 70);
+  g.fillStyle = '#a5e9d4'; g.font = '700 32px "Plus Jakarta Sans", sans-serif'; g.fillText(sub, 30, 70);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));

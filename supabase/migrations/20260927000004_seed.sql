@@ -29,7 +29,7 @@ insert into public.settings (key, value) values
   ('max_photos_per_item', '5'),
   ('enable_3d', '1'),
   ('theme_effects', '1'),
-  ('auto_scroll', '1'),
+  ('auto_scroll', '0'),
   ('footer_enabled', '1'),
   ('footer_kicker', 'Bonus untuk setiap pembelian produk'),
   ('footer_title', 'Voucher kopi 20% di Brew to Inspire'),

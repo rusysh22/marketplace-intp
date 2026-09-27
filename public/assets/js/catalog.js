@@ -417,6 +417,7 @@ async function init3D() {
     try { localStorage.setItem('cm_3d_hidden', on ? '0' : '1'); } catch {}
     if (on && !window.__store3d) {
       try {
+        await Promise.all(['800 44px', '700 32px', 'italic 700 70px'].map((w) => document.fonts?.load(`${w} "Plus Jakarta Sans"`))).catch(() => {});
         const mod = await import('./store3d.js');
         window.__store3d = mod.createStore3D($('#store3d'), {
           settings: state.settings, categories: state.categories, products: state.products,

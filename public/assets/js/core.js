@@ -35,7 +35,7 @@ export function imgUrl(path, bucket = 'product-photos') {
 }
 
 export const PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="640" height="480" fill="#eaf4f1"/><circle cx="320" cy="213" r="102" fill="#f8fffc"/><path d="M258 224l37-45 39 38 30-22 37 37" fill="none" stroke="#54a79c" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="273" cy="187" r="10" fill="#54a79c"/><text x="320" y="382" text-anchor="middle" font-family="Arial,sans-serif" font-size="17" font-weight="bold" letter-spacing="3" fill="#397184">FOTO PRODUK</text></svg>');
+  '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480"><rect width="640" height="480" fill="#eaf4f1"/><circle cx="320" cy="213" r="102" fill="#f8fffc"/><path d="M258 224l37-45 39 38 30-22 37 37" fill="none" stroke="#54a79c" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="273" cy="187" r="10" fill="#54a79c"/><text x="320" y="382" text-anchor="middle" font-family="Plus Jakarta Sans,sans-serif" font-size="17" font-weight="bold" letter-spacing="3" fill="#397184">FOTO PRODUK</text></svg>');
 
 export function errText(e) {
   const m = e?.message || e?.error_description || e?.error || String(e);

@@ -10,7 +10,7 @@ Dilengkapi **toko 3D (Three.js)** yang terinspirasi desain toko Interport.
 | Login karyawan | Supabase Auth (email + password) |
 | Foto barang & bukti bayar | Supabase Storage (kompatibel S3) |
 | Logika bisnis | Fungsi Postgres (RPC), dipanggil dari `supabase-js` |
-| Frontend | HTML + CSS + JavaScript statis (tanpa build), Three.js untuk 3D |
+| Frontend | HTML + CSS + JavaScript statis (tanpa build), Three.js untuk 3D, font Plus Jakarta Sans |
 
 Tidak perlu server sendiri: folder `public/` cukup di-hosting sebagai situs statis (Netlify, Vercel,
 Cloudflare Pages, GitHub Pages, atau di-embed seperti katalog lama).
@@ -130,6 +130,9 @@ Admin berikutnya cukup diangkat dari menu **Admin → Pengguna**.
 - **Metode pembayaran** → edit *QRIS* → unggah gambar QR → centang Aktif. Cek rekening BCA/Mandiri.
 - **Pengaturan** → nomor WhatsApp admin, info pengambilan barang, batas bayar, biaya admin, komisi,
   domain email kantor, tampilan (3D, efek latar, gulir otomatis), footer voucher.
+  Gulir otomatis (mode layar TV) **mati secara default**; nyalakan hanya jika katalog ditayangkan di layar TV.
+  Jika seed lama (dengan gulir otomatis menyala) sudah terlanjur dijalankan, matikan dengan:
+  `update public.settings set value = '0' where key = 'auto_scroll';`
 - **Jenis barang** → tambah/ubah jenis, pilihan ukuran, dan area pajangannya di toko 3D.
 
 ### 7. (Opsional) Kedaluwarsa pesanan terjadwal
