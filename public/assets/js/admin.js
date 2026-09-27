@@ -184,7 +184,8 @@ async function orders() {
   const counts = {};
   all.forEach((o) => (counts[o.status] = (counts[o.status] || 0) + 1));
   const list = orderFilter === 'all' ? all : all.filter((o) => o.status === orderFilter);
-  main().innerHTML = head('Pesanan', 'Verifikasi bukti bayar, siapkan barang, dan tandai selesai saat diserahkan.', '<button class="btn btn-ghost btn-sm" data-export>⬇ Export CSV</button>') + `
+  main().innerHTML = head('Pesanan', 'Verifikasi bukti bayar, siapkan barang, dan tandai selesai saat diserahkan.',
+    '<button class="btn btn-ghost btn-sm" data-export>⬇ Export CSV</button><button class="btn btn-primary btn-sm" data-offline>+ Catat penjualan offline</button>') + `
     <div class="tabs">${[['waiting_verification'], ['waiting_payment'], ['paid'], ['ready_pickup'], ['completed'], ['cancelled'], ['expired'], ['all']].map(([k]) =>
       `<button type="button" data-f="${k}" class="${orderFilter === k ? 'active' : ''}">${k === 'all' ? 'Semua' : ORDER_STATUS[k][0]}${counts[k] && k !== 'all' ? ` <span class="pill">${counts[k]}</span>` : ''}</button>`).join('')}</div>
     ${list.length ? `<div class="table-wrap"><table class="tbl"><thead><tr><th>Kode</th><th>Tanggal</th><th>Pembeli</th><th>Barang</th><th>Metode</th><th class="num">Total</th><th>Status</th><th></th></tr></thead><tbody>
@@ -195,6 +196,7 @@ async function orders() {
     </tbody></table></div>` : '<div class="panel empty"><strong>Tidak ada pesanan</strong>pada status ini.</div>'}`;
   $$('[data-f]').forEach((b) => (b.onclick = () => { orderFilter = b.dataset.f; orders(); }));
   $$('[data-open]').forEach((b) => (b.onclick = () => openOrder(all.find((o) => o.id === Number(b.dataset.open)))));
+  $('[data-offline]').onclick = () => recordOfflineOrder();
   $('[data-export]').onclick = () => downloadCsv(`pesanan-${new Date().toISOString().slice(0, 10)}.csv`, all.flatMap((o) => o.order_items.map((i) => ({
     order: o.code, tanggal: fmtDate(o.created_at), status: o.status, pembeli: o.profiles?.name || o.buyer_name, metode: o.payment_snapshot?.name,
     kode_barang: i.code, barang: i.name, qty: i.qty, harga: i.price, harga_normal: i.normal_price, penjual: i.seller_name,
@@ -246,6 +248,49 @@ async function openOrder(o) {
         : `<a href="${esc(proof)}" target="_blank" rel="noopener"><img src="${esc(proof)}" alt="Bukti bayar" style="width:100%;border-radius:10px;border:1px solid var(--line)"></a>`) : '<p class="muted small">Belum ada bukti.</p>'}</div>
     </div>`
   });
+}
+
+// Catat transaksi offline/tunai (langsung lunas), stok & pencairan tetap tercatat normal
+async function recordOfflineOrder() {
+  const prods = unwrap(await sb.from('products').select('id, code, name, price, stock, seller_name').eq('status', 'published').gt('stock', 0).order('name'));
+  if (!prods.length) return toast('Tidak ada barang tayang dengan stok tersedia', 'error');
+  const m = modal({
+    title: 'Catat penjualan offline', wide: true,
+    body: `<p class="small muted" style="margin:0 0 10px">Untuk transaksi yang terjadi langsung (tunai/di tempat), tanpa lewat alur checkout online. Pesanan akan langsung tercatat <strong>Lunas</strong>, stok berkurang, dan tetap masuk pencairan penjual.</p>
+      <div class="grid-form">
+        <label class="field span-2"><span>Nama pembeli (opsional)</span><input type="text" data-buyer placeholder="Mis. Budi (tamu) — kosongkan kalau tidak tahu"></label>
+        <label class="field span-all"><span>Catatan (opsional)</span><input type="text" data-note placeholder="Mis. dibayar tunai di meja katalog"></label>
+      </div>
+      <div class="filter-bar" style="margin-top:10px"><input type="search" data-q placeholder="Cari barang"></div>
+      <div class="table-wrap" style="max-height:45vh"><table class="tbl"><thead><tr><th></th><th>Barang</th><th class="num">Harga</th><th class="num" style="width:90px">Qty</th></tr></thead><tbody>
+      ${prods.map((p) => `<tr data-id="${p.id}" data-name="${esc((p.code + ' ' + p.name).toLowerCase())}"><td><input type="checkbox" aria-label="Pilih"></td>
+        <td>${esc(p.code || '')} ${esc(p.name)}<div class="small muted">Penjual: ${esc(p.seller_name || '-')} · stok ${p.stock}</div></td>
+        <td class="num">${rupiah(p.price)}</td><td class="num"><input type="number" value="1" min="1" max="${p.stock}" style="width:70px;min-height:32px;padding:4px 6px"></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="small muted" style="margin-top:8px;text-align:right">Subtotal: <strong data-total>Rp0</strong></div>`,
+    actions: [{ label: 'Batal' }, { label: 'Catat sebagai Lunas', cls: 'btn-primary', onClick: async ({ body }) => {
+      const items = $$('tbody tr', body).filter((tr) => $('input[type=checkbox]', tr).checked).map((tr) => ({
+        product_id: Number(tr.dataset.id), qty: Math.max(1, Number($('input[type=number]', tr).value) || 1)
+      }));
+      if (!items.length) throw new Error('Pilih minimal 1 barang');
+      const { data, error } = await sb.rpc('admin_create_offline_order', {
+        p_items: items, p_buyer_name: $('[data-buyer]', body).value.trim() || null, p_note: $('[data-note]', body).value.trim() || null
+      });
+      if (error) throw error;
+      toast(`Pesanan ${data.code} dicatat lunas (${rupiah(data.total)})`, 'ok');
+      refreshCounts(); orders();
+    } }]
+  });
+  const recalc = () => {
+    const total = $$('tbody tr', m.body).filter((tr) => $('input[type=checkbox]', tr).checked)
+      .reduce((a, tr) => a + (prods.find((p) => p.id === Number(tr.dataset.id))?.price || 0) * (Number($('input[type=number]', tr).value) || 0), 0);
+    $('[data-total]', m.body).textContent = rupiah(total);
+  };
+  $$('tbody tr', m.body).forEach((tr) => {
+    $('input[type=checkbox]', tr).addEventListener('change', recalc);
+    $('input[type=number]', tr).addEventListener('input', recalc);
+  });
+  $('[data-q]', m.body).oninput = (e) => { const q = e.target.value.toLowerCase(); $$('tbody tr', m.body).forEach((tr) => (tr.hidden = !tr.dataset.name.includes(q))); };
 }
 
 // ============================================================================

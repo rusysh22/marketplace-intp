@@ -174,7 +174,7 @@ async function loadMine() {
         ${p.status === 'rejected' && p.reject_reason ? `<div class="notice danger small" style="margin-top:6px">Alasan ditolak: ${esc(p.reject_reason)}</div>` : ''}
       </div>
       <div class="btn-row">
-        ${['pending', 'rejected'].includes(p.status) ? '<button class="btn btn-ghost btn-sm" data-edit>Ubah</button>' : ''}
+        <button class="btn btn-ghost btn-sm" data-edit>Ubah</button>
         ${p.status !== 'hidden' ? `<button class="btn btn-ghost btn-sm" data-withdraw>${['pending', 'rejected'].includes(p.status) ? 'Hapus' : 'Tarik'}</button>` : ''}
       </div></div>`;
   }).join('');
@@ -198,18 +198,18 @@ function editItem(p) {
       <label class="field"><span>Jenis</span><select name="category_id">${categories.map((c) => `<option value="${c.id}" ${c.id === p.category_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
       <label class="field"><span>Ukuran</span><input type="text" name="size" value="${esc(p.size || '')}"></label>
       <label class="field"><span>Kondisi (%)</span><input type="number" name="condition_pct" min="0" max="100" value="${p.condition_pct ?? 80}"></label>
-      <label class="field"><span>Harga jual</span><input type="number" name="price" min="0" value="${p.price}"></label>
-      <label class="field"><span>Harga normal</span><input type="number" name="original_price" min="0" value="${p.original_price ?? ''}"></label>
+      <label class="field"><span>Harga jual</span><input type="text" inputmode="numeric" name="price" value="${p.price.toLocaleString('id-ID')}"></label>
+      <label class="field"><span>Harga normal</span><input type="text" inputmode="numeric" name="original_price" value="${p.original_price ? p.original_price.toLocaleString('id-ID') : ''}"></label>
       <label class="field"><span>Stok</span><input type="number" name="stock" min="1" value="${p.stock}"></label>
-      <label class="field"><span>Nominal donasi</span><input type="number" name="donation_amount" min="0" value="${p.donation_amount ?? 0}"></label>
+      <label class="field"><span>Nominal donasi</span><input type="text" inputmode="numeric" name="donation_amount" value="${(p.donation_amount || 0).toLocaleString('id-ID')}"></label>
       <label class="field span-all"><span>Deskripsi</span><textarea name="summary">${esc(p.summary || '')}</textarea></label>
       <label class="field span-all"><span>Catatan kondisi</span><textarea name="condition_note">${esc(p.condition_note || '')}</textarea></label>
       <label class="field span-all"><span>Ganti foto (opsional — mengganti semua foto lama)</span><input type="file" name="photos" accept="image/*" multiple></label>
-    </div><p class="small muted">Setelah disimpan, barang kembali ke antrean verifikasi admin.</p>`,
+    </div><p class="small muted">${p.status === 'published' ? '⚠️ Barang ini sedang tayang di katalog — begitu disimpan, barang akan turun dari katalog dan menunggu verifikasi ulang admin sebelum tayang lagi.' : 'Setelah disimpan, barang kembali ke antrean verifikasi admin.'}</p>`,
     actions: [{ label: 'Batal' }, { label: 'Simpan & ajukan ulang', cls: 'btn-primary', onClick: async ({ body }) => {
       const v = (n) => $(`[name=${n}]`, body).value;
       const patch = { name: v('name'), category_id: Number(v('category_id')), size: v('size'), condition_pct: Number(v('condition_pct')),
-        price: Number(v('price')), original_price: v('original_price'), donation_amount: Number(v('donation_amount')) || 0,
+        price: num(v('price')) || 0, original_price: num(v('original_price')), donation_amount: num(v('donation_amount')) || 0,
         stock: Number(v('stock')), summary: v('summary'), condition_note: v('condition_note') };
       const files = $('[name=photos]', body).files;
       if (files.length) {
@@ -223,6 +223,9 @@ function editItem(p) {
       loadMine();
     } }]
   });
+  $$('[name=price],[name=original_price],[name=donation_amount]', m.body).forEach((i) => i.addEventListener('input', () => {
+    const v = num(i.value); i.value = v == null || Number.isNaN(v) ? '' : v.toLocaleString('id-ID');
+  }));
   return m;
 }
 

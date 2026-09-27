@@ -247,7 +247,6 @@ function cardHtml(p) {
       <div>${rating}${p.size ? `<span class="size-chip">Ukuran ${esc(p.size)}</span>` : ''}</div>
       <p class="summary">${esc(p.summary || '')}</p>
       ${priceBlock(p)}
-      ${p.donation_amount > 0 ? `<div class="donation-chip">💝 ${rupiah(p.donation_amount)} untuk donasi</div>` : ''}
       ${flash}
       <div class="actions">
         <button class="detail-btn" type="button">Detail barang</button>
@@ -283,7 +282,6 @@ function openDetail(p) {
         ${imgs.length > 1 ? `<div class="gallery-thumbs">${imgs.map((u, i) => `<img src="${esc(u)}" data-i="${i}" class="${i ? '' : 'active'}" alt="Foto ${i + 1}">`).join('')}</div>` : ''}</div>
       <div><div class="eyebrow">${esc(p.category_name || '')}</div><h3 style="margin:6px 0">${esc(p.name)}</h3>
         ${priceBlock(p)}
-        ${p.donation_amount > 0 ? `<div class="donation-chip">💝 ${rupiah(p.donation_amount)} dari penjualan ini untuk donasi</div>` : ''}
         <p class="small muted" style="margin:10px 0">${esc(p.summary || '')}</p>
         <table class="tbl"><tbody>
           <tr><td class="muted">Kondisi</td><td>${p.condition_pct == null ? 'Konfirmasi penjual' : p.condition_pct + '%'} · ${esc(p.item_condition || '-')}</td></tr>
