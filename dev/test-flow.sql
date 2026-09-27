@@ -122,6 +122,33 @@ update public.orders set expires_at = now() - interval '1 minute' where status =
 select public.expire_orders() as expired;
 select code, stock from public.products where code = 'CM-26-2';
 
+-- 7) Import Excel: non-admin ditolak; satu baris error membatalkan seluruh import
+select pg_temp.act(null);
+do $$ begin
+  perform public.admin_import_products('[{"row":2,"id":1,"price":1}]', 'x.xlsx');
+  raise exception 'SEHARUSNYA GAGAL';
+exception when others then
+  if sqlerrm = 'SEHARUSNYA GAGAL' then raise; end if;
+  raise notice 'OK ditolak: %', sqlerrm;
+end $$;
+reset role;
+select pg_temp.act('33333333-3333-3333-3333-333333333333');
+do $$ begin
+  perform public.admin_import_products(jsonb_build_array(
+    jsonb_build_object('row', 2, 'id', (select id from public.products where code = 'CM-26-2'), 'price', 99000),
+    jsonb_build_object('row', 3, 'name', 'Barang X', 'category', 'Tidak Ada', 'price', 1000)), 'x.xlsx');
+  raise exception 'SEHARUSNYA GAGAL';
+exception when others then
+  if sqlerrm = 'SEHARUSNYA GAGAL' then raise; end if;
+  raise notice 'OK ditolak: %', sqlerrm;
+end $$;
+select price as harga_tidak_berubah from public.products where code = 'CM-26-2';
+select public.admin_import_products(jsonb_build_array(
+  jsonb_build_object('row', 2, 'id', (select id from public.products where code = 'CM-26-2'), 'price', 95000, 'stock', 5),
+  jsonb_build_object('row', 3, 'name', 'Barang Import', 'category', 'Elektronik', 'price', 1000, 'stock', 2)), 'uji.xlsx') as hasil_import;
+reset role;
+select code, price, stock from public.products where code = 'CM-26-2' or name = 'Barang Import' order by code;
+
 -- kartu stok
 select p.code, m.type, m.qty_change, m.balance, m.ref from public.stock_movements m join public.products p on p.id = m.product_id
 where p.code like 'CM-26-%' order by m.id;
