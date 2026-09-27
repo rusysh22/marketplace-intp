@@ -16,13 +16,15 @@
   <main class="wrap" style="max-width:520px;padding:28px 0 60px">
     <div id="pane-identity">
       <div class="page-head"><span class="kicker">Karyawan</span><h1>Anda siapa?</h1>
-        <p>Pilih nama Anda untuk menjual barang, checkout, dan memantau pesanan. Tidak perlu password —
+        <p>Ketik <strong>email kantor Interport</strong> Anda lengkap, lalu tekan Enter. Tidak perlu password —
           barang tetap diverifikasi admin sebelum tayang.</p></div>
-      <div class="panel">
-        <label class="field"><span>Cari nama / email</span><input type="search" id="q" placeholder="Ketik nama Anda…" autocomplete="off"></label>
-        <div id="emp-list" style="display:grid;gap:6px;max-height:340px;overflow:auto;margin-top:4px"></div>
-        <p class="small muted" id="emp-empty" hidden>Tidak ditemukan. Belum terdaftar? Hubungi admin untuk didaftarkan.</p>
-      </div>
+      <form class="panel" id="form-identity">
+        <label class="field"><span class="req">Email kantor</span>
+          <input type="email" id="q" placeholder="nama.anda@interport.co.id" autocomplete="email" required inputmode="email" autocapitalize="off" autocorrect="off">
+          <small>Gunakan email @interport.co.id, ketik lengkap lalu tekan Enter</small></label>
+        <button class="btn btn-primary btn-block" type="submit" style="margin-top:4px">Cari & konfirmasi identitas</button>
+        <div id="emp-result" style="margin-top:12px"></div>
+      </form>
       <button class="btn btn-ghost btn-sm" type="button" id="show-admin" style="margin-top:14px">Saya admin, masuk dengan password</button>
     </div>
 

@@ -25,6 +25,8 @@ create table if not exists public.profiles (
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+-- Cegah email dobel (dipakai juga untuk pencarian identitas via email penuh)
+create unique index if not exists profiles_email_unique_idx on public.profiles (lower(email)) where email is not null;
 
 -- ---------------------------------------------------------------------------
 -- Master data & konfigurasi (semua dikelola admin dari halaman Admin)

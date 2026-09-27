@@ -582,12 +582,16 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- Identitas karyawan (tanpa login): pilih dari daftar, tanpa password/OTP.
+-- Identitas karyawan (tanpa login): cari pakai email PENUH, tanpa password/OTP.
 -- Verifikasi tetap ada di sisi admin sebelum barang tayang / bukti bayar disetujui.
+-- Sengaja tidak ada fungsi "list semua karyawan" ke publik -- hanya pencarian
+-- satu-satu by email supaya data 200+ karyawan tidak bisa ditarik borongan.
 -- ---------------------------------------------------------------------------
-create or replace function public.employee_directory() returns table(id uuid, name text, email text, department text)
+create or replace function public.find_employee_by_email(p_email text) returns table(id uuid, name text, email text, department text)
 language sql stable security definer set search_path = public as $$
-  select id, name, email, department from public.profiles where active order by name;
+  select id, name, email, department from public.profiles
+  where active and email is not null and lower(email) = lower(trim(p_email))
+  limit 1;
 $$;
 
 create or replace function public.my_profile(p_actor uuid) returns public.profiles

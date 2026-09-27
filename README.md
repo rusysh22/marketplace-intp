@@ -16,9 +16,10 @@ Dilengkapi **toko 3D (Three.js)** yang terinspirasi desain toko Interport.
 Tidak perlu server sendiri: folder `public/` cukup di-hosting sebagai situs statis (Netlify, Vercel,
 Cloudflare Pages, GitHub Pages, atau di-embed seperti katalog lama).
 
-> ⚠️ **Catatan keamanan (disengaja, keputusan produk):** karyawan tidak login — mereka cukup **memilih
-> namanya sendiri** dari daftar di halaman "Pilih identitas", tanpa password atau verifikasi apa pun.
-> Artinya siapa pun yang punya akses ke situs ini bisa mengaku jadi karyawan lain (submit barang,
+> ⚠️ **Catatan keamanan (disengaja, keputusan produk):** karyawan tidak login — mereka cukup **mengetik
+> email kantor `@interport.co.id` miliknya sendiri** di halaman "Pilih identitas" (dicocokkan ke database),
+> tanpa password atau verifikasi apa pun (bukan OTP, bukan magic link).
+> Artinya siapa pun yang tahu/menebak email karyawan lain bisa mengaku jadi orang itu (submit barang,
 > checkout, isi rekening pencairan atas nama orang lain). Ini diterima karena barang **baru tayang
 > setelah admin verifikasi**, dan bukti bayar **baru dianggap lunas setelah admin verifikasi** — jadi
 > tidak ada aksi berdampak langsung yang lolos tanpa mata admin. Hanya **admin** yang tetap wajib login
@@ -75,9 +76,10 @@ Padanan istilah ERP (D365 / Odoo) supaya mudah dipetakan:
   pantry + kulkas, lampu gantung, tanaman). Setiap area = satu/lebih jenis barang; jumlah barang yang
   "dipajang" mengikuti stok tersedia. Klik area → katalog terfilter. Bisa diputar, di-zoom, dan disembunyikan.
 
-**Pilih identitas (login.html)** — karyawan cukup cari & pilih namanya dari daftar (tanpa password), lalu
-klik konfirmasi. Admin punya jalur terpisah "Saya admin, masuk dengan password" (email + password Supabase
-Auth asli).
+**Pilih identitas (login.html)** — karyawan mengetik email kantor `@interport.co.id` miliknya lengkap lalu
+Enter, sistem mencari kecocokan persis dan menampilkan konfirmasi nama sebelum lanjut (tanpa password,
+tanpa daftar nama yang bisa dilihat publik). Admin punya jalur terpisah "Saya admin, masuk dengan password"
+(email + password Supabase Auth asli).
 
 **Jual barang (sell.html)** — form multi-barang (nama, jenis dari master data, ukuran dengan saran per jenis,
 kondisi baru/preloved + slider %, harga jual, harga normal/coret, stok, deskripsi, catatan minus, hingga 5 foto
@@ -115,6 +117,9 @@ Tambahan yang saya sesuaikan dari kebutuhan awal:
    2. `supabase/migrations/20260927000002_logic.sql` — fungsi bisnis, trigger kartu stok, view katalog
    3. `supabase/migrations/20260927000003_security.sql` — RLS + bucket Storage (`product-photos`, `payment-proofs`, `site-assets`)
    4. `supabase/migrations/20260927000004_seed.sql` — pengaturan awal, jenis barang, rekening, 31 barang lama
+   5. `supabase/migrations/20260927000005_donation.sql` — kolom nominal donasi per barang
+   6. `supabase/migrations/20260927000006_seed_employees.sql` — import daftar karyawan Interport
+      (dari `Data User.xlsx`, 233 orang) + fungsi pencarian identitas by email
 
    Atau dengan Supabase CLI: `supabase link --project-ref <ref>` lalu `supabase db push`.
 
@@ -148,8 +153,13 @@ berikutnya: buat user lewat dashboard seperti langkah 2, lalu jadikan admin dari
 (tombol "Jadikan admin" hanya muncul untuk akun yang sudah punya login Supabase Auth).
 
 ### 6. Daftarkan karyawan
-Di menu **Admin → Pengguna → + Tambah karyawan**, isi nama (wajib) + email/departemen/WA (opsional, hanya
-label). Karyawan langsung bisa memilih namanya sendiri di halaman "Pilih identitas" — tanpa password.
+233 karyawan Interport dari `Data User.xlsx` sudah otomatis masuk lewat migrasi #6 di atas. Untuk karyawan
+baru/susulan, tambah lewat **Admin → Pengguna → + Tambah karyawan** (nama wajib + email/departemen/WA
+opsional), atau `insert` langsung ke `public.profiles` lewat SQL Editor untuk impor massal lagi.
+
+Karyawan masuk dengan mengetik **email kantor `@interport.co.id` miliknya lengkap** lalu Enter di halaman
+"Pilih identitas" — dicocokkan persis (case-insensitive) ke kolom `email`, bukan memilih dari daftar
+(sengaja begitu supaya seluruh daftar 233 nama tidak bisa ditarik borongan lewat API).
 
 ### 7. Lengkapi master data di menu Admin
 - **Metode pembayaran** → edit *QRIS* → unggah gambar QR → centang Aktif. Cek rekening BCA/Mandiri.
@@ -193,7 +203,7 @@ aktif, bukan sistem autentikasi.
 
 | Fungsi | Dipakai oleh | Kegunaan |
 |---|---|---|
-| `employee_directory()` | Halaman Pilih identitas | Daftar nama untuk dipilih (tanpa data sensitif) |
+| `find_employee_by_email(email)` | Halaman Pilih identitas | Cari SATU identitas berdasarkan email penuh (tidak ada endpoint list-semua) |
 | `my_profile(p_actor)`, `update_my_profile(p_actor, data)` | Karyawan | Lihat/ubah profil & rekening sendiri |
 | `submit_items(p_actor, items, note)` | Penjual | Daftarkan banyak barang sekaligus, kode otomatis CM-xx-n |
 | `my_products(p_actor)` | Penjual | Daftar "Barang saya" |
