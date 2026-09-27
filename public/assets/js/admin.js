@@ -3,7 +3,7 @@
 // Semua akses dijaga RLS + fungsi is_admin() di database.
 // ============================================================================
 import {
-  sb, $, $$, esc, rupiah, fmtDate, toast, errText, modal, confirmDialog, promptDialog, renderNav, requireAdminSession,
+  sb, $, $$, esc, rupiah, num, fmtDate, toast, errText, modal, confirmDialog, promptDialog, renderNav, requireAdminSession,
   loadSettings, uploadFile, imgUrl, PLACEHOLDER, badge, ORDER_STATUS, PRODUCT_STATUS, copyText, waLink
 } from './core.js';
 
@@ -142,10 +142,10 @@ async function review() {
           </dl>
           <div class="grid-form" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
             <label class="field"><span>Jenis</span><select name="category_id">${categories.map((c) => `<option value="${c.id}" ${c.id === p.category_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-            <label class="field"><span>Harga jual</span><input type="number" name="price" value="${p.price}" min="0"></label>
-            <label class="field"><span>Harga coret</span><input type="number" name="original_price" value="${p.original_price ?? ''}" min="0"></label>
+            <label class="field"><span>Harga jual</span><input type="text" inputmode="numeric" name="price" value="${p.price.toLocaleString('id-ID')}"></label>
+            <label class="field"><span>Harga coret</span><input type="text" inputmode="numeric" name="original_price" value="${p.original_price ? p.original_price.toLocaleString('id-ID') : ''}"></label>
             <label class="field"><span>Stok</span><input type="number" name="stock" value="${p.stock}" min="0"></label>
-            <label class="field"><span>Nominal donasi</span><input type="number" name="donation_amount" value="${p.donation_amount ?? 0}" min="0"></label>
+            <label class="field"><span>Nominal donasi</span><input type="text" inputmode="numeric" name="donation_amount" value="${(p.donation_amount || 0).toLocaleString('id-ID')}"></label>
           </div>
           <div class="btn-row" style="margin-top:12px"><button class="btn btn-primary" data-approve>✓ Setujui & tayangkan</button><button class="btn btn-danger" data-reject>✕ Tolak</button></div>
         </div></div>`;
@@ -153,11 +153,14 @@ async function review() {
   $$('.review-card').forEach((card) => {
     const id = Number(card.dataset.id);
     $$('.imgs img', card).forEach((img) => (img.onclick = () => modal({ title: 'Foto', wide: true, body: `<img src="${esc(img.src)}" style="width:100%;border-radius:10px" alt="">` })));
+    $$('[name=price],[name=original_price],[name=donation_amount]', card).forEach((i) => i.addEventListener('input', () => {
+      const v = num(i.value); i.value = v == null || Number.isNaN(v) ? '' : v.toLocaleString('id-ID');
+    }));
     $('[data-approve]', card).onclick = async (e) => {
       const v = (n) => $(`[name=${n}]`, card).value;
       e.target.disabled = true;
       const { error } = await sb.rpc('admin_review_product', { p_id: id, p_action: 'approve', p_reason: null,
-        p_patch: { category_id: Number(v('category_id')), price: Number(v('price')), original_price: v('original_price'), stock: Number(v('stock')), donation_amount: Number(v('donation_amount')) || 0 } });
+        p_patch: { category_id: Number(v('category_id')), price: num(v('price')) || 0, original_price: num(v('original_price')), stock: Number(v('stock')), donation_amount: num(v('donation_amount')) || 0 } });
       if (error) { e.target.disabled = false; return toast(errText(error), 'error'); }
       toast('Barang ditayangkan', 'ok'); card.remove(); refreshCounts();
     };
@@ -627,9 +630,9 @@ async function users() {
   main().innerHTML = head('Pengguna', `${data.length} akun. Tambah karyawan (tanpa password — mereka pilih namanya sendiri di halaman "Pilih identitas"), jadikan admin, atau nonaktifkan akun di sini.`,
     '<button class="btn btn-primary btn-sm" data-add-employee>+ Tambah karyawan</button>') + `
     <div class="filter-bar"><input type="search" data-q placeholder="Cari nama / email / departemen"></div>
-    <div class="table-wrap"><table class="tbl"><thead><tr><th>Nama</th><th>Email</th><th>Departemen</th><th>WA</th><th>Rekening</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>
-    ${data.map((u) => `<tr data-id="${u.id}" data-s="${esc([u.name, u.email, u.department, u.emp_id].join(' ').toLowerCase())}"><td>${esc(u.name)}<div class="small muted">${esc(u.emp_id || '')}</div></td><td>${esc(u.email || '')}</td><td>${esc(u.department || '')}</td><td>${esc(u.phone || '')}</td>
-      <td class="small">${u.bank_account ? esc(`${u.bank_name || ''} ${u.bank_account}`) : '-'}</td><td>${u.role === 'admin' ? '<span class="badge dark">Admin</span>' : 'Karyawan'}${u.has_login ? '' : '<div class="small muted">Tanpa login</div>'}</td>
+    <div class="table-wrap"><table class="tbl" id="users-table"><thead><tr><th>Nama</th><th>Email</th><th class="col-department">Departemen</th><th class="col-wa">WA</th><th class="col-bank">Rekening</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>
+    ${data.map((u) => `<tr data-id="${u.id}" data-s="${esc([u.name, u.email, u.department, u.emp_id].join(' ').toLowerCase())}"><td>${esc(u.name)}<div class="small muted">${esc(u.emp_id || '')}</div></td><td>${esc(u.email || '')}</td><td class="col-department">${esc(u.department || '')}</td><td class="col-wa">${esc(u.phone || '')}</td>
+      <td class="small col-bank">${u.bank_account ? esc(`${u.bank_name || ''} ${u.bank_account}`) : '-'}</td><td>${u.role === 'admin' ? '<span class="badge dark">Admin</span>' : 'Karyawan'}${u.has_login ? '' : '<div class="small muted">Tanpa login</div>'}</td>
       <td>${u.active ? '<span class="badge ok">Aktif</span>' : '<span class="badge danger">Nonaktif</span>'}</td>
       <td class="nowrap">${u.id === profile.id ? '<span class="small muted">(Anda)</span>' : `
         ${u.has_login ? `<button class="btn btn-ghost btn-sm" data-role>${u.role === 'admin' ? 'Jadikan karyawan' : 'Jadikan admin'}</button>` : '<span class="small muted" title="Buat akun lewat Supabase Dashboard → Authentication dulu supaya bisa jadi admin">Tanpa akun login</span>'}

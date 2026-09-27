@@ -44,15 +44,24 @@ create trigger settings_touch before update on public.settings for each row exec
 -- HANYA dipakai untuk admin (dibuat lewat Supabase Dashboard -> Authentication ->
 -- Add user, lalu dipromosikan jadi admin lewat SQL, lihat README). Karyawan tidak
 -- pakai jalur ini sama sekali -- profilnya dibuat admin lewat admin_create_employee().
+-- Kalau email yang dipakai bikin akun Auth sudah ada sebagai profil karyawan
+-- (mis. dari import Data User.xlsx), profil lama itu DITAUTKAN (id-nya diganti
+-- ke id auth baru) supaya role/nama/departemen yang sudah diisi tidak hilang.
 -- ---------------------------------------------------------------------------
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
   v_meta jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  v_existing uuid;
 begin
-  insert into public.profiles (id, email, name, has_login)
-  values (new.id, new.email, coalesce(nullif(v_meta ->> 'name', ''), nullif(v_meta ->> 'full_name', ''), split_part(new.email, '@', 1)), true)
-  on conflict (id) do update set has_login = true;
+  select id into v_existing from public.profiles where lower(email) = lower(new.email) and id <> new.id;
+  if v_existing is not null then
+    update public.profiles set id = new.id, has_login = true where id = v_existing;
+  else
+    insert into public.profiles (id, email, name, has_login)
+    values (new.id, new.email, coalesce(nullif(v_meta ->> 'name', ''), nullif(v_meta ->> 'full_name', ''), split_part(new.email, '@', 1)), true)
+    on conflict (id) do update set has_login = true;
+  end if;
   return new;
 end $$;
 

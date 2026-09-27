@@ -133,18 +133,25 @@ Tambahan yang saya sesuaikan dari kebutuhan awal:
    5. `supabase/migrations/20260927000005_donation.sql` — kolom nominal donasi per barang
    6. `supabase/migrations/20260927000006_seed_employees.sql` — import daftar karyawan Interport
       (dari `Data User.xlsx`, 233 orang) + fungsi pencarian identitas by email
-   7. `supabase/migrations/20260928000007_ui_update.sql` — pengaturan animasi 3D & teks pembayaran (juga untuk project yang sudah terpasang)
+   7. `supabase/migrations/20260927000007_admin_link_by_email.sql` — tautkan akun admin baru ke
+      profil karyawan yang sudah ada (kalau emailnya sama), lihat langkah 2 di bawah
+   8. `supabase/migrations/20260927000008_fix_overloaded_functions.sql` — bersihkan fungsi versi lama (overload)
+   9. `supabase/migrations/20260928000007_ui_update.sql` — pengaturan animasi 3D & teks pembayaran (juga untuk project yang sudah terpasang)
 
    Atau dengan Supabase CLI: `supabase link --project-ref <ref>` lalu `supabase db push`.
 
 ### 2. Buat akun admin pertama
-Karyawan tidak mendaftar sendiri (lihat catatan keamanan di atas) — hanya **admin** yang butuh akun
-Supabase Auth asli, dan itu pun dibuat manual lewat dashboard (bukan lewat halaman aplikasi):
-1. **Authentication → Users → Add user** → isi email & password admin pertama Anda. (Boleh matikan
-   **Authentication → Providers → Email → Confirm email** juga supaya reset password lewat email tidak
-   perlu klik konfirmasi.)
+**Mengubah `role` jadi `'admin'` di tabel `profiles` saja TIDAK CUKUP** — itu cuma menentukan hak akses,
+bukan bikin login-nya ada. Login admin wajib akun Supabase Auth asli (email + password), dan itu pun dibuat
+manual lewat dashboard (bukan lewat halaman aplikasi):
+1. **Authentication → Users → Add user** → isi email & password admin pertama Anda.
+   - Kalau email itu **sudah ada** sebagai profil karyawan (mis. dari import `Data User.xlsx`), migrasi #7
+     di atas otomatis **menautkan** akun baru ini ke profil karyawan tersebut — nama/departemen/role yang
+     sudah Anda isi (termasuk kalau sudah pernah di-`update role='admin'`) tidak hilang.
+   - Boleh matikan **Authentication → Providers → Email → Confirm email** juga supaya reset password lewat
+     email tidak perlu klik konfirmasi.
 2. **Authentication → URL Configuration → Site URL**: isi alamat situs Anda.
-3. Setelah user dibuat, lanjut ke langkah 5 di bawah untuk menjadikannya admin.
+3. Setelah user dibuat, lanjut ke langkah 5 di bawah untuk memastikan/menjadikannya admin.
 
 ### 3. Hubungkan frontend
 Isi `public/config.js` dengan **Project URL** dan **anon public key** dari
