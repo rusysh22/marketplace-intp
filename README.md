@@ -66,15 +66,28 @@ Padanan istilah ERP (D365 / Odoo) supaya mudah dipetakan:
 ## Fitur
 
 **Katalog (index.html)**
-- Data dinamis dari database; desain, warna, kartu produk, label *OUT OF STOCK*, cetak label harga A4,
-  tampilan grid/list, gulir otomatis (mode TV), latar pelangi, dan footer voucher dari katalog lama tetap ada
-  — semua bisa dinyalakan/dimatikan admin.
-- Filter jenis barang, pencarian (nama/kode/penjual), urutan (harga, nama, terbaru).
-- Flash sale dengan hitung mundur (mulai dalam / berakhir dalam) dan harga otomatis mengikuti jadwal.
-- Keranjang + checkout (QRIS / transfer), detail barang dengan galeri foto.
-- **Toko 3D**: ruangan isometrik (green wall + logo, bar counter & stool, rak baju, meja tengah, rak mainan,
-  pantry + kulkas, lampu gantung, tanaman). Setiap area = satu/lebih jenis barang; jumlah barang yang
-  "dipajang" mengikuti stok tersedia. Klik area → katalog terfilter. Bisa diputar, di-zoom, dan disembunyikan.
+- Data dinamis dari database; desain, warna, kartu produk, flash sale, tampilan grid/list, latar pelangi, dan
+  footer voucher dari katalog lama tetap ada — semua bisa dinyalakan/dimatikan admin.
+- **Barang terjual disembunyikan secara default.** Pengunjung bisa mencentang "Tampilkan yang terjual (n)"
+  untuk melihatnya (tampil dengan label *OUT OF STOCK*). Jumlah per jenis barang di filter ikut menyesuaikan.
+- Filter jenis barang (dengan jumlah), pencarian (nama/kode/penjual), urutan (rekomendasi, harga, nama, terbaru).
+- Detail barang (galeri foto, catatan kondisi, tanya via WhatsApp) terbuka dari foto atau tombol "Detail barang".
+- Ringkasan metode pembayaran (logo QRIS/bank). Nomor rekening/QR & nominal pasti sengaja baru tampil setelah
+  checkout, supaya setiap transfer terhubung ke satu pesanan (kode unik).
+- Cetak label harga A4 (8 label/halaman) — tombol hanya muncul untuk admin yang sedang login, mencetak barang
+  yang sedang tampil (bisa disaring dulu lewat filter/pencarian).
+- **Toko 3D**: ruangan isometrik (green wall + logo Interport, bar counter & stool, rak baju, meja tengah, rak
+  mainan, pantry + kulkas, meja kasir, lampu gantung, tanaman). Setiap area = satu/lebih jenis barang; isi rak
+  mengikuti stok tersedia. Klik area → katalog terfilter; klik filter kategori → kamera terbang ke area itu.
+  - **Animasi penjual & pembeli dengan bubble percakapan**: pembeli masuk lewat pintu kaca, menuju rak yang
+    punya barang tersedia, mengomentari barang **asli** dari database (nama & kondisi), lalu membayar di kasir
+    (staf menyebut total harganya) dan pulang membawa tas belanja. Penjual datang membawa kardus, menitipkan
+    barang di kasir, dan staf memverifikasinya. Maksimal 3 pengunjung sekaligus; mati otomatis jika pengguna
+    memilih *reduce motion*, dan bisa dimatikan di Admin → Pengaturan → Tampilan.
+  - **Logo** diambil dari `logo_url` di Pengaturan (default: logo resmi di interport.co.id), dipasang pada papan
+    2,4 × 1,0 m dengan bantalan putih agar proporsional. Logo ditampilkan sebagai elemen `<img>` yang
+    diproyeksikan 3D (CSS3DRenderer), jadi tidak memerlukan izin CORS dari server gambar. Jika gambar gagal
+    dimuat, papan menampilkan teks `logo_text`.
 
 **Pilih identitas (login.html)** — karyawan mengetik email kantor `@interport.co.id` miliknya lengkap lalu
 Enter, sistem mencari kecocokan persis dan menampilkan konfirmasi nama sebelum lanjut (tanpa password,
@@ -122,6 +135,8 @@ Tambahan yang saya sesuaikan dari kebutuhan awal:
       (dari `Data User.xlsx`, 233 orang) + fungsi pencarian identitas by email
    7. `supabase/migrations/20260927000007_admin_link_by_email.sql` — tautkan akun admin baru ke
       profil karyawan yang sudah ada (kalau emailnya sama), lihat langkah 2 di bawah
+   8. `supabase/migrations/20260927000008_fix_overloaded_functions.sql` — bersihkan fungsi versi lama (overload)
+   9. `supabase/migrations/20260928000007_ui_update.sql` — pengaturan animasi 3D & teks pembayaran (juga untuk project yang sudah terpasang)
 
    Atau dengan Supabase CLI: `supabase link --project-ref <ref>` lalu `supabase db push`.
 

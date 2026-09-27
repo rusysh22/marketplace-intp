@@ -3,12 +3,12 @@
 // ============================================================================
 import {
   sb, $, $$, esc, rupiah, duration, waLink, imgUrl, PLACEHOLDER, toast, modal, errText,
-  loadSettings, flag, getIdentity, cart, renderNav, copyText, configured
+  loadSettings, flag, getIdentity, getProfile, cart, renderNav, configured
 } from './core.js';
 
 const state = {
   settings: {}, categories: [], products: [], methods: [],
-  filter: 'all', search: '', sort: 'default', view: 'grid', phaseKey: ''
+  filter: 'all', search: '', sort: 'default', view: 'grid', phaseKey: '', showSold: false, isAdmin: false
 };
 const collator = new Intl.Collator('id', { sensitivity: 'base', numeric: true });
 
@@ -24,6 +24,8 @@ async function init() {
     $('#grid').innerHTML = `<div class="empty"><strong>Gagal memuat katalog</strong>${esc(errText(e))}</div>`;
     return;
   }
+  state.isAdmin = (await getProfile().catch(() => null))?.role === 'admin';
+  $('#print-all').hidden = !state.isAdmin;
   bindToolbar();
   applySettings();
   renderPayment();
@@ -73,26 +75,21 @@ function applySettings() {
   document.body.classList.toggle('fx', flag(s, 'theme_effects'));
 }
 
+// Ringkasan metode pembayaran. Nomor rekening + nominal (dengan kode unik) sengaja
+// hanya ditampilkan setelah checkout agar setiap transfer terhubung ke satu pesanan.
 function renderPayment() {
   const s = state.settings;
   const box = $('#payment');
   if (!state.methods.length) return;
   box.hidden = false;
-  box.style.setProperty('--cols', Math.min(state.methods.length, 3));
   const wa = s.admin_whatsapp;
-  box.innerHTML = `<div class="payment-intro"><span class="payment-kicker">Payment</span><h2 id="payment-title">Informasi pembayaran</h2>
-      <p>${esc(s.payment_intro || '')}</p>
-      ${wa ? `<a class="confirm-payment" href="${waLink(wa, 'Halo, saya ingin bertanya tentang pembayaran Compassion Market.')}" target="_blank" rel="noopener noreferrer">
-        <svg class="wa-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.7a8.5 8.5 0 0 1-12.8 7.2L3 20.3l1.4-4.6A8.5 8.5 0 1 1 20.5 11.7Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8.1 7.6c.3-.3.7-.3.9.1l1 1.7c.2.3.1.6-.1.8l-.6.6c.6 1.2 1.6 2.1 2.9 2.8l.6-.7c.2-.2.5-.3.8-.1l1.8.9c.4.2.5.6.2.9-.5.8-1.2 1.2-2.2 1-1.3-.4-3-1.9-4.6-3.4-1.7-1.5-2.7-3.3-2.5-4.8.1-.5.4-1 .8-1.3Z" fill="currentColor"/></svg>
-        <span>Tanya admin <small>WhatsApp ${esc(formatPhone(wa))}</small></span></a>` : ''}
-    </div>` + state.methods.map((m) => m.type === 'qris'
-      ? `<div class="bank qris"><div class="bank-head"><span class="bank-name">QRIS</span></div><span class="qris-mark">QRIS</span>
-           <span class="bank-owner">Semua e-wallet & m-banking. QR ditampilkan saat checkout.</span></div>`
-      : `<div class="bank"><div class="bank-head">${m.logo_url ? `<img class="bank-logo" src="${esc(imgUrl(m.logo_url, 'site-assets'))}" alt="Logo ${esc(m.bank_name)}" loading="lazy">` : ''}<span class="bank-name">${esc(m.bank_name || m.name)}</span></div>
-           <span class="bank-owner">${esc(m.account_holder || '')}</span>
-           <div class="bank-line"><strong class="bank-number">${esc(m.account_no || '')}</strong><button class="copy-btn" type="button" data-copy="${esc(m.account_no)}">Salin nomor</button></div></div>`
-    ).join('');
-  $$('[data-copy]', box).forEach((b) => (b.onclick = () => copyText(b.dataset.copy, b)));
+  box.innerHTML = `<span class="payment-kicker">Pembayaran</span>
+    <div class="pay-chips">${state.methods.map((m) => `<span class="pay-chip">${m.logo_url
+      ? `<img src="${esc(imgUrl(m.logo_url, 'site-assets'))}" alt="${esc(m.bank_name || m.name)}" loading="lazy">` : `<strong>${esc(m.type === 'qris' ? 'QRIS' : m.bank_name || m.name)}</strong>`}</span>`).join('')}</div>
+    <p>${esc(s.payment_intro || 'Pilih metode saat checkout; rekening/QR & nominal pasti muncul di halaman pesanan.')}</p>
+    ${wa ? `<a class="confirm-payment" href="${waLink(wa, 'Halo, saya ingin bertanya tentang Compassion Market.')}" target="_blank" rel="noopener noreferrer">
+      <svg class="wa-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.7a8.5 8.5 0 0 1-12.8 7.2L3 20.3l1.4-4.6A8.5 8.5 0 1 1 20.5 11.7Z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8.1 7.6c.3-.3.7-.3.9.1l1 1.7c.2.3.1.6-.1.8l-.6.6c.6 1.2 1.6 2.1 2.9 2.8l.6-.7c.2-.2.5-.3.8-.1l1.8.9c.4.2.5.6.2.9-.5.8-1.2 1.2-2.2 1-1.3-.4-3-1.9-4.6-3.4-1.7-1.5-2.7-3.3-2.5-4.8.1-.5.4-1 .8-1.3Z" fill="currentColor"/></svg>
+      <span>Tanya admin <small>WhatsApp ${esc(formatPhone(wa))}</small></span></a>` : ''}`;
 }
 const formatPhone = (n) => String(n).replace(/^62/, '0').replace(/(\d{4})(\d{4})(\d+)/, '$1-$2-$3');
 
@@ -114,6 +111,7 @@ function bindToolbar() {
   $('#sort-products').addEventListener('change', (e) => { state.sort = e.target.value; renderGrid(); });
   $$('.views button').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   $('#print-all').addEventListener('click', () => printTags());
+  $('#show-sold').addEventListener('change', (e) => { state.showSold = e.target.checked; renderFilters(); renderGrid(); });
 }
 function setView(v) {
   state.view = v;
@@ -123,18 +121,27 @@ function setView(v) {
 }
 function restoreView() { const v = localStorage.getItem('cm_view'); if (v) setView(v); }
 
+const isShown = (p) => state.showSold || p.stock > 0;
+
 function renderFilters() {
   const counts = {};
-  state.products.forEach((p) => { counts[p.category_id] = (counts[p.category_id] || 0) + 1; });
+  const shown = state.products.filter(isShown);
+  shown.forEach((p) => { counts[p.category_id] = (counts[p.category_id] || 0) + 1; });
   const cats = state.categories.filter((c) => counts[c.id]);
-  $('#filters').innerHTML = `<button type="button" data-cat="all" class="${state.filter === 'all' ? 'active' : ''}">Semua</button>` +
-    cats.map((c) => `<button type="button" data-cat="${c.id}" class="${String(state.filter) === String(c.id) ? 'active' : ''}">${esc(c.name)}</button>`).join('');
-  $$('#filters button').forEach((b) => (b.onclick = () => setFilter(b.dataset.cat)));
+  if (state.filter !== 'all' && !String(state.filter).split(',').some((id) => counts[id])) state.filter = 'all';
+  $('#filters').innerHTML = `<button type="button" data-cat="all" class="${state.filter === 'all' ? 'active' : ''}">Semua <span class="n">${shown.length}</span></button>` +
+    cats.map((c) => `<button type="button" data-cat="${c.id}" class="${String(state.filter) === String(c.id) ? 'active' : ''}">${esc(c.name)} <span class="n">${counts[c.id]}</span></button>`).join('');
+  $$('#filters button').forEach((b) => (b.onclick = () => {
+    setFilter(b.dataset.cat);
+    if (b.dataset.cat === 'all') window.__store3d?.reset(); else window.__store3d?.focusCategory(Number(b.dataset.cat));
+  }));
+  const sold = state.products.length - state.products.filter((p) => p.stock > 0).length;
+  $('#show-sold-label').hidden = !sold;
+  $('#show-sold-count').textContent = sold;
 }
 export function setFilter(cat) {
   state.filter = cat;
   $$('#filters button').forEach((b) => b.classList.toggle('active', b.dataset.cat === String(cat)));
-  $$('#store3d-legend button').forEach((b) => b.classList.toggle('active', b.dataset.cat === String(cat)));
   renderGrid();
 }
 
@@ -163,7 +170,7 @@ function tick() {
 
 // ---------- kartu produk ----------
 function visibleProducts() {
-  let list = state.products.slice();
+  let list = state.products.filter(isShown);
   if (state.filter !== 'all') { const ids = String(state.filter).split(','); list = list.filter((p) => ids.includes(String(p.category_id))); }
   if (state.search) list = list.filter((p) => [p.name, p.code, p.seller_name, p.summary, p.category_name, p.size]
     .some((v) => String(v || '').toLowerCase().includes(state.search)));
@@ -184,11 +191,11 @@ function renderGrid() {
   const all = state.products;
   const avail = all.filter((p) => p.stock > 0).length;
   const intro = state.settings.catalog_intro ? state.settings.catalog_intro + ' ' : '';
-  $('#catalog-intro').textContent = `${all.length} barang • ${avail} tersedia • ${all.length - avail} terjual. ${intro}`.trim();
+  $('#catalog-intro').textContent = `${avail} barang tersedia${all.length - avail ? ` • ${all.length - avail} sudah terjual` : ''}. ${intro}`.trim();
   const list = visibleProducts();
   const grid = $('#grid');
   if (!list.length) {
-    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><strong>Belum ada barang di sini</strong>Coba kategori lain atau <a href="sell.html">jual barang Anda</a>.</div>`;
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><strong>Belum ada barang di sini</strong>Coba kategori lain${!state.showSold ? ', centang "Tampilkan yang terjual",' : ''} atau <a href="sell.html">jual barang Anda</a>.</div>`;
     return;
   }
   grid.innerHTML = list.map(cardHtml).join('');
@@ -196,7 +203,7 @@ function renderGrid() {
     const p = state.products.find((x) => x.id === Number(el.dataset.id));
     $('.photo', el).onclick = () => openDetail(p);
     $('.buy-btn', el)?.addEventListener('click', () => addToCart(p));
-    $('.print-card', el)?.addEventListener('click', () => printTags(p.id));
+    $('.detail-btn', el).onclick = () => openDetail(p);
   });
   tick();
 }
@@ -225,7 +232,6 @@ function cardHtml(p) {
     ? `<div class="flash" data-start="${Date.parse(p.flash_start)}" data-end="${Date.parse(p.flash_end)}" aria-label="Flash sale ${esc(p.flash_sale_name)}">
          <strong class="flash-title">🔥 Flash ${rupiah(p.flash_price)} <span class="live-indicator">LIVE</span></strong>
          <span style="text-align:right"><span class="count-label"></span><time class="countdown">…</time></span></div>` : '';
-  const wa = state.settings.admin_whatsapp;
   const inCart = cart.has(p.id);
   return `<article class="card ${sold ? 'sold' : ''}" data-id="${p.id}" aria-labelledby="t-${p.id}">
     <button class="photo" type="button" style="background-image:url(&quot;${esc(img)}&quot;),url(&quot;${PLACEHOLDER}&quot;)" aria-label="Lihat foto ${esc(p.name)}">
@@ -244,14 +250,10 @@ function cardHtml(p) {
       ${p.donation_amount > 0 ? `<div class="donation-chip">💝 ${rupiah(p.donation_amount)} untuk donasi</div>` : ''}
       ${flash}
       <div class="actions">
-        <details><summary>Detail barang</summary><div class="details-content">
-          <strong>Catatan kondisi</strong><p>${esc(p.condition_note || '-')}</p>
-          ${wa ? `<a class="wa" href="${waLink(wa, `Halo, saya tertarik dengan ${p.name} (${p.code}) dari ${p.seller_name || '-'}. Apakah masih tersedia?`)}" target="_blank" rel="noopener noreferrer">Tanya via WhatsApp ↗</a>` : ''}
-        </div></details>
+        <button class="detail-btn" type="button">Detail barang</button>
         <button class="buy-btn ${inCart ? 'in-cart' : ''}" type="button">${inCart ? '✓ Di keranjang' : '+ Keranjang'}</button>
         <span class="sold-contact">Stok habis</span>
       </div>
-      <button class="print-card" type="button">▣ Cetak label harga</button>
     </div></article>`;
 }
 
@@ -289,7 +291,9 @@ function openDetail(p) {
           <tr><td class="muted">Stok</td><td>${p.stock}</td></tr>
           <tr><td class="muted">Penjual</td><td>${esc(p.seller_name || '-')}</td></tr>
           <tr><td class="muted">Catatan</td><td>${esc(p.condition_note || '-')}</td></tr>
-        </tbody></table></div></div>`,
+        </tbody></table>
+        ${state.settings.admin_whatsapp ? `<a class="btn btn-ghost btn-sm" style="margin-top:10px" href="${waLink(state.settings.admin_whatsapp, `Halo, saya tertarik dengan ${p.name} (${p.code}) dari ${p.seller_name || '-'}. Apakah masih tersedia?`)}" target="_blank" rel="noopener noreferrer">Tanya via WhatsApp ↗</a>` : ''}
+        </div></div>`,
     actions: p.stock > 0 ? [{ label: 'Tutup' }, { label: cart.has(p.id) ? 'Lihat keranjang' : '+ Tambah ke keranjang', cls: 'btn-primary', onClick: () => { if (cart.has(p.id)) openCart(); else addToCart(p); } }] : [{ label: 'Tutup' }]
   });
   $$('.gallery-thumbs img', m.body).forEach((t) => (t.onclick = () => {
@@ -382,8 +386,8 @@ async function checkout() {
 }
 
 // ---------- cetak label harga ----------
-function printTags(onlyId) {
-  const list = (onlyId ? state.products.filter((p) => p.id === onlyId) : visibleProducts()).filter((p) => p.stock > 0);
+function printTags() {
+  const list = visibleProducts().filter((p) => p.stock > 0);
   if (!list.length) { toast('Tidak ada barang tersedia untuk dicetak'); return; }
   const sheet = $('#print-sheet');
   const store = (state.settings.store_name || 'Compassion Market').toUpperCase();
@@ -423,6 +427,7 @@ async function init3D() {
         const mod = await import('./store3d.js');
         window.__store3d = mod.createStore3D($('#store3d'), {
           settings: state.settings, categories: state.categories, products: state.products,
+          logoUrl: state.settings.logo_url ? imgUrl(state.settings.logo_url, 'site-assets') : '',
           onSelect: (catIds) => {
             setFilter(catIds?.length ? catIds.join(',') : 'all');
             $('.catalog').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -434,17 +439,9 @@ async function init3D() {
         $('#store3d').innerHTML = '<div class="store3d-fallback">Tampilan 3D tidak dapat dimuat di perangkat ini.</div>';
       }
     }
-    renderLegend();
   };
   toggle.onclick = () => show(section.hidden);
   show(!hidden);
-}
-
-function renderLegend() {
-  const counts = {};
-  state.products.forEach((p) => { if (p.stock > 0) counts[p.category_id] = (counts[p.category_id] || 0) + 1; });
-  $('#store3d-legend').innerHTML = state.categories.map((c) => `<button type="button" data-cat="${c.id}" class="${String(state.filter) === String(c.id) ? 'active' : ''}">${esc(c.icon || '')} ${esc(c.name)} · ${counts[c.id] || 0}</button>`).join('');
-  $$('#store3d-legend button').forEach((b) => (b.onclick = () => { setFilter(b.dataset.cat); window.__store3d?.focusCategory(Number(b.dataset.cat)); }));
 }
 
 // ---------- gulir otomatis (mode layar TV / kios) ----------
