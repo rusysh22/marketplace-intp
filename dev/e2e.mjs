@@ -55,20 +55,22 @@ async function adminLogin(page, email) {
   await page.waitForURL((u) => u.pathname.endsWith('/admin.html'));
 }
 // Karyawan: dibuat admin lewat menu Pengguna, lalu "pilih identitas" tanpa password
-async function addEmployee(admin, name, dept) {
+async function addEmployee(admin, name, dept, email) {
   await admin.goto(BASE + '/admin.html#users');
   await admin.click('[data-add-employee]');
   const m = admin.locator('.modal');
   await m.locator('[name=name]').fill(name);
   await m.locator('[name=department]').fill(dept);
+  await m.locator('[name=email]').fill(email);
   await m.locator('[name=phone]').fill('081234567890');
   await m.locator('button', { hasText: 'Tambah' }).click();
   await expectToast(admin, /Karyawan ditambahkan/);
 }
-async function pickIdentity(page, name) {
+async function pickIdentity(page, email) {
   await page.goto(BASE + '/login.html');
-  await page.fill('#q', name);
-  await page.locator('#emp-list [data-id]', { hasText: name }).first().click();
+  await page.fill('#q', email);
+  await page.locator('#form-identity button[type=submit]').click();
+  await page.click('#confirm-identity');
   await page.waitForURL((u) => u.pathname.endsWith('/index.html'));
 }
 
@@ -77,8 +79,8 @@ try {
   const admin = await newPage('admin');
   await createAdmin('admin@interport.co.id', 'Admin Market');
   await adminLogin(admin, 'admin@interport.co.id');
-  await addEmployee(admin, 'Sari Penjual', 'Finance');
-  await addEmployee(admin, 'Budi Pembeli', 'Ops');
+  await addEmployee(admin, 'Sari Penjual', 'Finance', 'sari.penjual.e2e@interport.co.id');
+  await addEmployee(admin, 'Budi Pembeli', 'Ops', 'budi.pembeli.e2e@interport.co.id');
   step('admin login & mendaftarkan 2 karyawan');
 
   // ---------- katalog awal ----------
@@ -104,7 +106,7 @@ try {
 
   // ---------- penjual ----------
   const seller = await newPage('seller');
-  await pickIdentity(seller, 'Sari Penjual');
+  await pickIdentity(seller, 'sari.penjual.e2e@interport.co.id');
   await seller.goto(BASE + '/sell.html');
   const png = await guest.screenshot({ clip: { x: 300, y: 300, width: 400, height: 300 } });
   const fillItem = async (i, it) => {
@@ -164,7 +166,7 @@ try {
 
   // ---------- pembeli ----------
   const buyer = await newPage('buyer');
-  await pickIdentity(buyer, 'Budi Pembeli');
+  await pickIdentity(buyer, 'budi.pembeli.e2e@interport.co.id');
   await buyer.waitForSelector('.card');
   await buyer.fill('#search', 'sony');
   const sony = buyer.locator('.card', { hasText: 'Sony' });
