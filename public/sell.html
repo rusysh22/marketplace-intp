@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Jual Barang — Compassion Market</title>
+  <link rel="stylesheet" href="assets/css/app.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <header id="topnav" class="topnav"></header>
+  <main class="wrap" style="padding-bottom:60px">
+    <div class="page-head"><span class="kicker">Self service penjual</span><h1>Jual barang preloved</h1>
+      <p>Daftarkan satu atau beberapa barang sekaligus. Admin akan memverifikasi sebelum barang tayang di katalog.
+         Uang hasil penjualan ditransfer admin ke rekening di profil Anda setelah pembeli membayar.</p></div>
+    <div class="tabs" role="tablist">
+      <button type="button" class="active" data-tab="new">+ Daftarkan barang</button>
+      <button type="button" data-tab="mine">Barang saya</button>
+      <button type="button" data-tab="sales">Penjualan saya</button>
+      <button type="button" data-tab="profile">Profil & rekening</button>
+    </div>
+
+    <section data-pane="new">
+      <form id="sell-form" novalidate>
+        <div id="items"></div>
+        <div class="panel" style="margin-top:14px">
+          <div class="btn-row" style="justify-content:space-between">
+            <button type="button" class="btn btn-ghost" id="add-item">+ Tambah barang lain</button>
+            <span class="small muted" id="item-count"></span>
+          </div>
+          <label class="field" style="margin-top:12px"><span>Catatan untuk admin (opsional)</span>
+            <textarea name="note" placeholder="Mis. barang bisa diambil di meja saya lt. 3"></textarea></label>
+          <label class="check" style="margin-top:12px"><input type="checkbox" id="agree" required> Saya menyatakan barang ini milik saya, kondisi sesuai deskripsi, dan siap diserahkan ke admin.</label>
+          <div class="btn-row" style="margin-top:14px"><button class="btn btn-primary" type="submit" id="submit-btn">Kirim untuk diverifikasi</button><span id="submit-status" class="small muted"></span></div>
+        </div>
+      </form>
+    </section>
+
+    <section data-pane="mine" hidden><div id="mine" class="panel"><div class="loading-block"><span class="spinner"></span></div></div></section>
+    <section data-pane="sales" hidden><div id="sales" class="panel"><div class="loading-block"><span class="spinner"></span></div></div></section>
+    <section data-pane="profile" hidden>
+      <form id="profile-form" class="panel">
+        <h2>Profil & rekening pencairan</h2>
+        <p class="small muted" style="margin:0 0 14px">Rekening dipakai admin untuk mentransfer hasil penjualan Anda.</p>
+        <div class="grid-form">
+          <label class="field"><span class="req">Nama lengkap</span><input type="text" name="name" required></label>
+          <label class="field"><span>NIK / ID karyawan</span><input type="text" name="emp_id"></label>
+          <label class="field"><span>Departemen</span><input type="text" name="department"></label>
+          <label class="field"><span>No. WhatsApp</span><input type="tel" name="phone"></label>
+          <label class="field"><span>Bank / e-wallet</span><input type="text" name="bank_name" placeholder="BCA / Mandiri / GoPay"></label>
+          <label class="field"><span>No. rekening</span><input type="text" name="bank_account"></label>
+          <label class="field"><span>Atas nama</span><input type="text" name="bank_holder"></label>
+        </div>
+        <div class="btn-row" style="margin-top:14px"><button class="btn btn-primary" type="submit">Simpan profil</button></div>
+      </form>
+      <form id="password-form" class="panel">
+        <h3>Ganti password</h3>
+        <div class="grid-form"><label class="field"><span>Password baru</span><input type="password" name="password" minlength="6" required autocomplete="new-password"></label></div>
+        <div class="btn-row" style="margin-top:12px"><button class="btn btn-ghost" type="submit">Ganti password</button></div>
+      </form>
+    </section>
+  </main>
+  <template id="item-tpl">
+    <fieldset class="panel item-card">
+      <legend class="item-title">Barang #<span class="n"></span></legend>
+      <button type="button" class="btn btn-ghost btn-sm remove-item">Hapus</button>
+      <div class="grid-form">
+        <label class="field span-2"><span class="req">Nama barang</span><input type="text" name="name" required maxlength="120" placeholder="Mis. Nike Air Force 1 putih"></label>
+        <label class="field"><span class="req">Jenis barang</span><select name="category_id" required></select></label>
+        <label class="field"><span>Ukuran</span><input type="text" name="size" list="" placeholder="Mis. 42 / L / 30x20 cm"><datalist></datalist></label>
+        <label class="field"><span class="req">Kondisi</span><select name="item_condition"><option value="preloved">Preloved (bekas)</option><option value="baru">Baru / belum dipakai</option></select></label>
+        <label class="field"><span class="req">Kondisi barang (%)</span>
+          <div class="range-row"><input type="range" name="condition_pct" min="0" max="100" step="5" value="80"><output>80%</output></div>
+          <small class="cond-hint"></small></label>
+        <label class="field"><span class="req">Harga jual (Rp)</span><input type="text" inputmode="numeric" name="price" required placeholder="150.000"></label>
+        <label class="field"><span>Harga normal / beli (Rp)</span><input type="text" inputmode="numeric" name="original_price" placeholder="Opsional, ditampilkan dicoret"></label>
+        <label class="field"><span class="req">Jumlah / stok</span><input type="number" name="stock" min="1" max="99" value="1" required></label>
+        <label class="field span-all"><span class="req">Deskripsi singkat</span><textarea name="summary" required maxlength="400" placeholder="Merek, warna, kelengkapan, alasan dijual…"></textarea></label>
+        <label class="field span-all"><span>Catatan kondisi / minus</span><textarea name="condition_note" maxlength="400" placeholder="Mis. ada goresan kecil di sisi kiri, dus tidak ada"></textarea></label>
+        <div class="field span-all"><span class="req">Foto barang</span>
+          <div class="photo-drop"><input type="file" accept="image/*" multiple class="photo-input" aria-label="Pilih foto">
+            <div class="photo-previews"></div>
+            <small class="photo-hint"></small></div></div>
+      </div>
+    </fieldset>
+  </template>
+  <script type="module" src="assets/js/sell.js"></script>
+</body>
+</html>

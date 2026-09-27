@@ -1,0 +1,67 @@
+/* Halaman jual barang, pesanan, admin */
+.item-card{position:relative;border:1px solid var(--line);margin:0 0 14px;padding-top:6px}
+.item-card legend{font-weight:900;color:var(--navy);padding:0 6px;font-size:14px}
+.item-card .remove-item{position:absolute;top:10px;right:12px}
+.range-row{display:flex;align-items:center;gap:10px}
+.range-row input{flex:1;accent-color:var(--teal-strong)}
+.range-row output{min-width:44px;font-weight:900;color:var(--navy);text-align:right}
+.photo-drop{border:2px dashed #cfe0dc;border-radius:12px;padding:12px;background:#fbfdfc}
+.photo-drop.drag{border-color:var(--teal);background:var(--teal-soft)}
+.photo-previews{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.photo-previews figure{position:relative;margin:0;width:88px;height:88px;border-radius:10px;overflow:hidden;background:#eef5f3}
+.photo-previews img{width:100%;height:100%;object-fit:cover}
+.photo-previews button{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;font-size:13px;line-height:1}
+.photo-previews figure:first-child::after{content:"Utama";position:absolute;left:4px;bottom:4px;background:var(--teal-strong);color:#fff;font-size:9px;font-weight:800;padding:2px 5px;border-radius:4px}
+
+.list-item{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #edf3f1}
+.list-item:last-child{border-bottom:0}
+.list-item .grow{flex:1;min-width:0}
+.list-item h4{margin:0 0 3px;font-size:14px;color:var(--navy)}
+.list-item .meta{font-size:12px;color:var(--muted)}
+.list-item .thumb{width:64px;height:64px}
+
+/* pesanan */
+.order-card{display:grid;gap:14px}
+.order-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.order-head h2{font-size:18px}
+.pay-box{border-radius:14px;padding:16px;background:linear-gradient(125deg,#103c55,#145d64);color:#fff}
+.pay-box .amount{font-size:clamp(26px,4vw,34px);font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.pay-box .amount small{font-size:13px;font-weight:700;color:#a5e9d4;display:block;letter-spacing:0}
+.pay-box .acct{background:#fff;color:var(--ink);border-radius:11px;padding:12px 14px;margin-top:12px}
+.pay-box .acct strong{font-size:20px;font-variant-numeric:tabular-nums;color:#17495c}
+.pay-box img.qris{display:block;width:min(280px,100%);background:#fff;border-radius:12px;padding:10px;margin:12px auto 0}
+.countdown-pill{display:inline-block;background:#fff4a9;color:#6d3d0b;border-radius:30px;padding:4px 10px;font-weight:900;font-size:12px;font-variant-numeric:tabular-nums}
+.timeline{display:flex;gap:4px;flex-wrap:wrap;margin:0;padding:0;list-style:none}
+.timeline li{flex:1;min-width:90px;padding:8px 6px;border-radius:8px;background:#eef3f2;color:#7b8f94;font-size:11px;font-weight:800;text-align:center}
+.timeline li.done{background:var(--ok-soft);color:var(--ok)}
+.timeline li.now{background:var(--navy);color:#fff}
+
+/* admin */
+.admin-layout{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;padding:18px 0 60px}
+.admin-side{position:sticky;top:72px;align-self:start;display:flex;flex-direction:column;gap:2px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px}
+.admin-side .grp{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:#8aa0a5;padding:10px 10px 4px}
+.admin-side button{display:flex;justify-content:space-between;align-items:center;text-align:left;border:0;background:none;border-radius:9px;padding:9px 10px;font:inherit;font-size:13px;font-weight:750;color:#35565f;cursor:pointer}
+.admin-side button:hover{background:var(--teal-soft)}
+.admin-side button.active{background:var(--navy);color:#fff}
+.admin-side .pill{min-width:20px;height:20px;border-radius:10px;background:#f58a43;color:#fff;font-size:11px;display:inline-grid;place-items:center;padding:0 6px}
+.admin-main h2{margin:0 0 4px;font-size:22px;letter-spacing:-.03em;color:var(--navy)}
+.admin-main .sub{margin:0 0 14px;color:var(--muted);font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.stat .v{font-size:24px;font-weight:900;color:var(--navy);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--muted);font-weight:700}
+.stat.alert{border-color:#f5c48f;background:#fff9f1}
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.filter-bar input,.filter-bar select{width:auto;min-width:160px;min-height:36px;padding:6px 10px;font-size:13px}
+.review-card{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:12px}
+.review-card .imgs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.review-card .imgs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:zoom-in}
+.review-card .imgs img:first-child{grid-column:1/-1}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:4px 10px;font-size:13px;margin:8px 0}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+@media(max-width:860px){
+  .admin-layout{grid-template-columns:1fr}
+  .admin-side{position:static;flex-direction:row;flex-wrap:wrap}
+  .admin-side .grp{display:none}
+  .review-card{grid-template-columns:1fr}
+}

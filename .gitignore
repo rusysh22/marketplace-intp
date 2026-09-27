@@ -1,0 +1,8 @@
+node_modules/
+dev/.storage/
+dev/.postgrest.conf
+.env
+*.log
+.DS_Store
+dev/.screens/
+dev/.server.log

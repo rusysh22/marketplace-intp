@@ -1,0 +1,18 @@
+{
+  "name": "compassion-market",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Marketplace barang preloved karyawan Interport — Supabase (Postgres, Auth, Storage) + frontend statis + toko 3D Three.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev/local-supabase.mjs",
+    "test": "bash dev/test-all.sh",
+    "test:sql": "psql \"$DATABASE_URL\" -q -f dev/test-flow.sql",
+    "test:e2e": "node dev/e2e.mjs"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "2.117.2",
+    "pg": "^8.16.0",
+    "three": "0.186.1"
+  }
+}

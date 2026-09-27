@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Masuk — Compassion Market</title>
+  <link rel="stylesheet" href="assets/css/app.css">
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <header id="topnav" class="topnav"></header>
+  <main class="wrap" style="max-width:520px;padding:28px 0 60px">
+    <div class="page-head"><span class="kicker">Akun karyawan</span><h1>Masuk atau daftar</h1>
+      <p>Gunakan akun untuk menjual barang, checkout, dan memantau pesanan.</p></div>
+    <div class="tabs" role="tablist">
+      <button type="button" class="active" data-tab="login">Masuk</button>
+      <button type="button" data-tab="register">Daftar akun baru</button>
+    </div>
+    <form class="panel" id="form-login" autocomplete="on">
+      <div style="display:grid;gap:12px">
+        <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="email"></label>
+        <label class="field"><span>Password</span><input type="password" name="password" required autocomplete="current-password"></label>
+        <button class="btn btn-primary btn-block" type="submit">Masuk</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="forgot">Lupa password?</button>
+      </div>
+    </form>
+    <form class="panel hidden" id="form-register" autocomplete="on">
+      <div class="grid-form">
+        <label class="field span-all"><span class="req">Nama lengkap</span><input type="text" name="name" required autocomplete="name"></label>
+        <label class="field"><span>NIK / ID karyawan</span><input type="text" name="emp_id"></label>
+        <label class="field"><span>Departemen</span><input type="text" name="department"></label>
+        <label class="field span-all"><span class="req">No. WhatsApp</span><input type="tel" name="phone" required placeholder="08xxxxxxxxxx" autocomplete="tel"></label>
+        <label class="field span-all"><span class="req">Email kantor</span><input type="email" name="email" required autocomplete="email"><small id="domain-hint"></small></label>
+        <label class="field span-all"><span class="req">Password (min. 6 karakter)</span><input type="password" name="password" required minlength="6" autocomplete="new-password"></label>
+        <button class="btn btn-primary btn-block span-all" type="submit">Daftar</button>
+      </div>
+    </form>
+  </main>
+  <script type="module" src="assets/js/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Compassion Market — Katalog Barang</title>
+  <meta name="description" content="Marketplace barang preloved karyawan Interport">
+  <link rel="stylesheet" href="assets/css/app.css">
+  <link rel="stylesheet" href="assets/css/market.css">
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <div class="celebration" aria-hidden="true"><span class="burst"></span><span class="burst"></span><span class="burst"></span><span class="burst"></span></div>
+  <header id="topnav" class="topnav"></header>
+
+  <div class="market" id="market">
+    <header class="market-header wrap">
+      <div class="brand-row">
+        <span class="brand-logo"><img id="brand-logo" alt="Interport" width="170" height="60"></span>
+        <div><span class="brand-kicker" id="brand-kicker">Compassion Market</span><h1 id="title">Katalog barang</h1></div>
+        <div class="brand-cta">
+          <button class="btn btn-ghost" type="button" id="toggle-3d" hidden>🧊 Toko 3D</button>
+          <a class="btn btn-primary" href="sell.html">+ Jual barang</a>
+        </div>
+      </div>
+    <section class="store3d-section" id="store3d-section" hidden aria-label="Toko 3D interaktif">
+      <div class="store3d-card" id="store3d">
+        <div class="store3d-overlay">
+          <div class="title"><strong>Jelajahi toko 3D</strong><span>Klik rak / meja untuk melihat kategorinya · seret untuk memutar · scroll untuk zoom</span></div>
+          <div class="ctrls"><button class="btn btn-ghost btn-sm" type="button" id="s3d-reset">⟲ Reset</button></div>
+        </div>
+      </div>
+      <div class="store3d-legend" id="store3d-legend"></div>
+    </section>
+      <div class="payment" id="payment" aria-labelledby="payment-title" hidden></div>
+    </header>
+
+
+    <main class="page">
+      <section class="catalog wrap" aria-labelledby="title">
+        <p class="catalog-intro" id="catalog-intro">Memuat katalog…</p>
+        <div class="toolbar">
+          <div class="filters" id="filters" role="group" aria-label="Kategori barang"></div>
+          <div class="toolbar-right">
+            <label class="search-box"><input type="search" id="search" placeholder="Cari barang / kode / penjual" aria-label="Cari barang"></label>
+            <div class="sorter"><label for="sort-products">Urutkan</label>
+              <select id="sort-products">
+                <option value="default">Tersedia dulu</option>
+                <option value="newest">Terbaru</option>
+                <option value="price-up">Harga: terendah</option>
+                <option value="price-down">Harga: tertinggi</option>
+                <option value="name-up">Nama: A–Z</option>
+                <option value="name-down">Nama: Z–A</option>
+                <option value="listed">Urutan katalog</option>
+              </select>
+            </div>
+            <button id="print-all" class="print-all" type="button">▣ Cetak semua label</button>
+            <div class="views" role="group" aria-label="Tampilan katalog">
+              <button type="button" data-view="grid" class="active">▦ Grid</button>
+              <button type="button" data-view="list">☷ List</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid" id="grid" aria-live="polite"><div class="loading-block"><span class="spinner"></span></div></div>
+      </section>
+    </main>
+
+    <footer class="market-footer" id="market-footer" hidden></footer>
+  </div>
+
+  <div id="print-sheet" aria-hidden="true"></div>
+  <button id="auto-scroll-toggle" class="auto-scroll-toggle" type="button" hidden aria-pressed="false">⏸ Jeda gulir otomatis</button>
+  <script type="module" src="assets/js/catalog.js"></script>
+</body>
+</html>
