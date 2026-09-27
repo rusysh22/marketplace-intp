@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "@supabase/supabase-js": "2.117.2",
+    "exceljs": "^4.4.0",
     "pg": "^8.16.0",
     "three": "0.186.1"
   }

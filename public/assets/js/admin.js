@@ -304,7 +304,9 @@ async function products() {
   const s = prodFilter.q.toLowerCase();
   const list = s ? data.filter((p) => [p.code, p.name, p.seller_name].some((v) => String(v || '').toLowerCase().includes(s))) : data;
   main().innerHTML = head('Produk & stok', 'Edit data barang, atur stok (tercatat di kartu stok), tandai pilihan, sembunyikan / tayangkan.',
-    '<button class="btn btn-ghost btn-sm" data-export>⬇ Export CSV</button><button class="btn btn-primary btn-sm" data-new>+ Barang baru</button>') + `
+    `<button class="btn btn-ghost btn-sm" data-xlsx-export title="Export barang sesuai filter ke Excel">⬇ Export Excel</button>
+     <label class="btn btn-ghost btn-sm" title="Update massal dari file hasil Export Excel">⬆ Import Excel<input type="file" data-xlsx-import accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label>
+     <button class="btn btn-primary btn-sm" data-new>+ Barang baru</button>`) + `
     <div class="filter-bar"><select data-status>${[['all', 'Semua status'], ...Object.entries(PRODUCT_STATUS).map(([k, [l]]) => [k, l])].map(([k, l]) => `<option value="${k}" ${prodFilter.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <input type="search" data-q placeholder="Cari kode / nama / penjual" value="${esc(prodFilter.q)}"><span class="small muted">${list.length} barang</span></div>
     <div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Kode</th><th>Barang</th><th>Jenis</th><th>Penjual</th><th class="num">Harga</th><th class="num">Stok</th><th>Status</th><th></th></tr></thead><tbody>
@@ -317,12 +319,58 @@ async function products() {
   $('[data-status]').onchange = (e) => { prodFilter.status = e.target.value; products(); };
   $('[data-q]').onchange = (e) => { prodFilter.q = e.target.value; products(); };
   $('[data-new]').onclick = () => editProduct(null);
-  $('[data-export]').onclick = () => downloadCsv('produk.csv', list.map((p) => ({ kode: p.code, nama: p.name, jenis: catName(p.category_id), penjual: p.seller_name, kondisi: p.item_condition, kondisi_pct: p.condition_pct, ukuran: p.size, harga_normal: p.original_price, harga: p.price, donasi: p.donation_amount, stok: p.stock, status: p.status })));
+  $('[data-xlsx-export]').onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      const { exportProducts } = await import('./admin-excel.js');
+      const s = await loadSettings();
+      const filterLabel = [prodFilter.status === 'all' ? 'Semua status' : PRODUCT_STATUS[prodFilter.status]?.[0], prodFilter.q && `"${prodFilter.q}"`].filter(Boolean).join(', ');
+      await exportProducts(list, categories, { storeName: s.store_name, filterLabel });
+      toast(`${list.length} barang diekspor ke Excel`, 'ok');
+    } catch (err) { toast(errText(err), 'error'); }
+    finally { e.target.disabled = false; }
+  };
+  $('[data-xlsx-import]').onchange = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) importExcel(file);
+  };
   $$('tr[data-id]').forEach((tr) => {
     const p = list.find((x) => x.id === Number(tr.dataset.id));
     $('[data-edit]', tr).onclick = () => editProduct(p);
     $('[data-stock]', tr).onclick = () => adjustStock(p);
     $('[data-card]', tr).onclick = () => stockCard(p);
+  });
+}
+
+async function importExcel(file) {
+  let mod, parsed, diff;
+  try {
+    mod = await import('./admin-excel.js');
+    parsed = await mod.readImport(file, categories);
+    const current = unwrap(await sb.from('products').select('*').limit(5000));
+    diff = mod.diffImport(parsed, current, categories);
+  } catch (err) { toast(errText(err), 'error'); return; }
+  const { updates, creates, errors, warnings, unchanged } = diff;
+  const total = updates.length + creates.length;
+  const stat = (v, l, cls = '') => `<div class="stat ${cls}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  modal({
+    title: `Pratinjau import — ${file.name}`, wide: true,
+    body: `<div class="stats" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr))">
+        ${stat(updates.length, 'Barang diubah')}${stat(creates.length, 'Barang baru')}${stat(unchanged, 'Tidak berubah')}${stat(errors.length, 'Baris error', errors.length ? 'alert' : '')}
+      </div>
+      ${errors.length ? `<div class="notice danger" style="margin-bottom:12px"><strong>Perbaiki dulu di Excel lalu import ulang — tidak ada yang disimpan selama masih ada error:</strong>
+        <ul style="margin:6px 0 0;padding-left:18px">${errors.map((x) => `<li>Baris ${x.row}${x.label ? ` (${esc(x.label)})` : ''}: ${x.messages.map(esc).join('; ')}</li>`).join('')}</ul></div>` : ''}
+      ${warnings.length ? `<div class="notice warn" style="margin-bottom:12px"><strong>Perhatian:</strong><ul style="margin:6px 0 0;padding-left:18px">${warnings.map((w) => `<li>Baris ${w.row} (${esc(w.label)}): ${esc(w.message)}</li>`).join('')}</ul></div>` : ''}
+      ${total ? `<div class="table-wrap" style="max-height:50vh"><table class="tbl"><thead><tr><th>Baris</th><th>Barang</th><th>Perubahan</th></tr></thead><tbody>
+        ${updates.map((u) => `<tr><td>${u.row}</td><td>${esc(u.label)}</td><td>${u.changes.map((c) => `<div><strong>${esc(c.label)}</strong>: <span class="muted">${esc(c.from)}</span> → ${esc(c.to)}</div>`).join('')}</td></tr>`).join('')}
+        ${creates.map((c) => `<tr><td>${c.row}</td><td>${esc(c.label)} <span class="badge info">Baru</span></td><td class="small">${esc([c.payload.category, c.payload.price != null ? rupiah(c.payload.price) : null, c.payload.stock != null ? 'stok ' + c.payload.stock : 'stok 1'].filter(Boolean).join(' · '))}</td></tr>`).join('')}
+      </tbody></table></div>` : (!errors.length ? '<div class="empty"><strong>Tidak ada perubahan</strong>Isi file sama dengan data di sistem.</div>' : '')}`,
+    actions: [{ label: 'Batal' }, ...(total && !errors.length ? [{ label: `Terapkan ${total} perubahan`, cls: 'btn-primary', onClick: async () => {
+      const res = unwrap(await sb.rpc('admin_import_products', { p_rows: [...updates.map((u) => u.payload), ...creates.map((c) => c.payload)], p_source: file.name }));
+      toast(`Import selesai: ${res.updated} diubah, ${res.created} baru${res.stock_changes ? `, ${res.stock_changes} penyesuaian stok` : ''}`, 'ok');
+      products();
+    } }] : [])]
   });
 }
 

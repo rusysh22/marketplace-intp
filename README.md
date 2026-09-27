@@ -106,7 +106,20 @@ hitung mundur batas bayar, unggah bukti (gambar/PDF), batalkan, status timeline.
 batal), Produk & stok (edit, input barang titipan, penyesuaian stok dengan keterangan, kartu stok, tandai
 pilihan ★), Flash sale (jadwal + pilih barang + diskon cepat % + kuota), Pencairan penjual, Jenis barang,
 Metode pembayaran (unggah QRIS), Pengaturan, **Pengguna** (tambah karyawan baru, jadikan admin / nonaktifkan),
-Audit log, Export CSV (pesanan, produk, pencairan).
+Audit log, Export CSV (pesanan, pencairan).
+
+**Export / import Excel di Produk & stok** — untuk update data massal tanpa edit satu per satu:
+1. **⬇ Export Excel** mengunduh barang sesuai filter aktif ke `.xlsx` berisi sheet *Produk* (header beku,
+   autofilter, format rupiah, dropdown Jenis barang / Kondisi / Status / Pilihan dari master data, kolom kunci
+   ID/Kode/Terakhir diubah berwarna abu-abu), *Master* (sumber dropdown), dan *Petunjuk*.
+2. Edit di Excel: ubah harga, stok, status, deskripsi, dsb. Tambah barang baru di baris kosong dengan ID
+   dikosongkan (wajib: nama, jenis, harga jual; kode dibuat otomatis).
+3. **⬆ Import Excel** menampilkan **pratinjau** sebelum menyimpan: jumlah barang diubah / baru / tidak
+   berubah, daftar perubahan per baris (nilai lama → baru), error per baris (jenis tidak ada di master data,
+   angka negatif, status tidak dikenal, dll.), serta peringatan jika barang diubah orang lain setelah export.
+4. **Terapkan** menjalankan `admin_import_products` dalam satu transaksi: satu baris error = tidak ada yang
+   tersimpan. Perubahan stok tercatat di kartu stok dengan keterangan "Import Excel: <nama file>", dan ringkasan
+   import masuk audit log. Menghapus baris dari file **tidak** menghapus barang (ubah status jadi Disembunyikan).
 
 Tambahan yang saya sesuaikan dari kebutuhan awal:
 - **Stok dikunci saat checkout** dan otomatis kembali jika pesanan kedaluwarsa/dibatalkan (mencegah barang
@@ -131,12 +144,14 @@ Tambahan yang saya sesuaikan dari kebutuhan awal:
    3. `supabase/migrations/20260927000003_security.sql` — RLS + bucket Storage (`product-photos`, `payment-proofs`, `site-assets`)
    4. `supabase/migrations/20260927000004_seed.sql` — pengaturan awal, jenis barang, rekening, 31 barang lama
    5. `supabase/migrations/20260927000005_donation.sql` — kolom nominal donasi per barang
-   6. `supabase/migrations/20260927000006_seed_employees.sql` — import daftar karyawan Interport
-      (dari `Data User.xlsx`, 233 orang) + fungsi pencarian identitas by email
-   7. `supabase/migrations/20260927000007_admin_link_by_email.sql` — tautkan akun admin baru ke
+   6. `supabase/migrations/20260927000007_admin_link_by_email.sql` — tautkan akun admin baru ke
       profil karyawan yang sudah ada (kalau emailnya sama), lihat langkah 2 di bawah
-   8. `supabase/migrations/20260927000008_fix_overloaded_functions.sql` — bersihkan fungsi versi lama (overload)
-   9. `supabase/migrations/20260928000007_ui_update.sql` — pengaturan animasi 3D & teks pembayaran (juga untuk project yang sudah terpasang)
+   7. `supabase/migrations/20260927000008_fix_overloaded_functions.sql` — bersihkan fungsi versi lama (overload)
+   8. `supabase/migrations/20260927000009_edit_published_item.sql` — penjual boleh mengubah barang yang sudah tayang
+   9. `supabase/migrations/20260927000010_hide_donation_public.sql` — nominal donasi hanya untuk admin
+   10. `supabase/migrations/20260927000011_offline_order.sql` — pencatatan penjualan offline
+   11. `supabase/migrations/20260928000007_ui_update.sql` — pengaturan animasi 3D & teks pembayaran
+   12. `supabase/migrations/20260928000008_admin_product_import.sql` — import/update massal barang dari Excel
 
    Atau dengan Supabase CLI: `supabase link --project-ref <ref>` lalu `supabase db push`.
 

@@ -14,9 +14,14 @@ const db = new pg.Pool({ connectionString: process.env.DATABASE_URL || 'postgres
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const errors = [];
-async function newPage(name) {
+const openPages = [];
+async function newPage(name, { with3d = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
+  openPages.push([name, page]);
+  // Toko 3D dirender CPU di sandbox (tanpa GPU): hanya tab tamu yang menampilkannya,
+  // supaya tab lain tidak berebut CPU dan pemeriksaan "elemen stabil" tidak timeout.
+  await page.addInitScript((show) => { if (localStorage.getItem('cm_3d_hidden') === null) localStorage.setItem('cm_3d_hidden', show ? '0' : '1'); }, with3d);
   // CDN -> node_modules lokal; gambar eksternal -> placeholder (lingkungan uji tanpa internet)
   await page.route('https://cdn.jsdelivr.net/**', async (r) => {
     const res = await fetch(r.request().url().replace('https://cdn.jsdelivr.net', BASE + '/cdn'));
@@ -84,7 +89,7 @@ try {
   step('admin login & mendaftarkan 2 karyawan');
 
   // ---------- katalog awal ----------
-  const guest = await newPage('guest');
+  const guest = await newPage('guest', { with3d: true });
   await guest.goto(BASE + '/');
   await guest.waitForSelector('.card');
   const cards = await guest.locator('.card').count();
@@ -97,6 +102,7 @@ try {
   await guest.evaluate(() => { window.__s3dTimeScale = 30; });
   await guest.locator('.s3d-bubble').first().waitFor({ timeout: 90000 });
   await guest.evaluate(() => { window.__s3dTimeScale = 1; });
+  await guest.click('#toggle-3d');                      // sembunyikan 3D setelah diuji
   if (!(await guest.locator('.s3d-logo').count())) throw new Error('Logo 3D tidak dipasang');
   await guest.waitForTimeout(3000);
   await shot(guest, '01-katalog');
@@ -243,6 +249,62 @@ try {
   await admin.waitForSelector('#settings-form');
   await shot(admin, '14-admin-pengaturan');
 
+  // ---------- export / import Excel (update massal produk) ----------
+  {
+    const ExcelJS = (await import('exceljs')).default;
+    await admin.goto(BASE + '/admin.html#products');
+    await admin.reload();                                   // bersihkan modal & filter dari langkah sebelumnya
+    await admin.waitForSelector('[data-xlsx-export]');
+    const [dl] = await Promise.all([admin.waitForEvent('download'), admin.click('[data-xlsx-export]')]);
+    const xlsxPath = OUT + 'export-produk.xlsx';
+    await dl.saveAs(xlsxPath);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(xlsxPath);
+    const ws = wb.getWorksheet('Produk');
+    if (!ws || !wb.getWorksheet('Master') || !wb.getWorksheet('Petunjuk')) throw new Error('Sheet Produk/Master/Petunjuk tidak lengkap');
+    const head = {}; ws.getRow(1).eachCell((c, n) => { head[c.value] = n; });
+    const rowOf = (name) => { let r = null; ws.eachRow((row, n) => { if (row.getCell(head['Nama barang']).value === name) r = row; }); return r; };
+    const jaket = rowOf('Jaket Parka Uniqlo');
+    if (!jaket) throw new Error('Barang tidak ada di file export');
+    if (!ws.getCell(2, head['Jenis barang']).dataValidation?.formulae?.[0]?.startsWith('Master!')) throw new Error('Dropdown jenis barang tidak terpasang');
+    jaket.getCell(head['Harga jual']).value = 155000;
+    jaket.getCell(head['Status']).value = 'Disembunyikan';
+    const hirono = rowOf('Figur Pop Mart Hirono');
+    hirono.getCell(head['Stok']).value = 3;
+    const newRow = ws.getRow(ws.actualRowCount + 1);
+    newRow.getCell(head['Nama barang']).value = 'Topi Baseball Uniqlo';
+    newRow.getCell(head['Jenis barang']).value = 'Tas & Aksesori';
+    newRow.getCell(head['Harga jual']).value = 50000;
+    newRow.getCell(head['Stok']).value = 2;
+    newRow.getCell(head['Status']).value = 'Tayang';
+    newRow.commit();
+    // 1) file dengan error -> pratinjau menolak, tidak ada tombol terapkan
+    const bad = new ExcelJS.Workbook(); await bad.xlsx.readFile(xlsxPath);
+    const bws = bad.getWorksheet('Produk'); bws.getCell(2, head['Jenis barang']).value = 'Kategori Ngawur'; bws.getCell(3, head['Stok']).value = -4;
+    await bad.xlsx.writeFile(OUT + 'import-error.xlsx');
+    await admin.setInputFiles('[data-xlsx-import]', OUT + 'import-error.xlsx');
+    await admin.locator('.modal', { hasText: 'Pratinjau import' }).locator('.notice.danger').waitFor();
+    if (await admin.locator('.modal button', { hasText: 'Terapkan' }).count()) throw new Error('Import berisi error tidak boleh bisa diterapkan');
+    await shot(admin, '14a-import-error');
+    await admin.locator('.modal button', { hasText: 'Batal' }).click();
+    // 2) file valid -> pratinjau -> terapkan
+    await wb.xlsx.writeFile(OUT + 'import-ok.xlsx');
+    await admin.setInputFiles('[data-xlsx-import]', OUT + 'import-ok.xlsx');
+    const pm = admin.locator('.modal', { hasText: 'Pratinjau import' });
+    await pm.locator('td', { hasText: 'Rp160.000' }).first().waitFor();
+    await shot(admin, '14b-import-pratinjau');
+    await pm.locator('button', { hasText: 'Terapkan 3 perubahan' }).click();
+    await expectToast(admin, /Import selesai: 2 diubah, 1 baru, 1 penyesuaian stok/);
+    const chk = (await db.query(`select name, price, status, stock from products where name in ('Jaket Parka Uniqlo','Figur Pop Mart Hirono','Topi Baseball Uniqlo') order by name`)).rows;
+    const by = Object.fromEntries(chk.map((r) => [r.name, r]));
+    if (Number(by['Jaket Parka Uniqlo'].price) !== 155000 || by['Jaket Parka Uniqlo'].status !== 'hidden') throw new Error('Update harga/status via import gagal');
+    if (by['Figur Pop Mart Hirono'].stock !== 3) throw new Error('Update stok via import gagal');
+    if (!by['Topi Baseball Uniqlo'] || by['Topi Baseball Uniqlo'].stock !== 2) throw new Error('Barang baru via import gagal');
+    const mv = (await db.query(`select m.note from stock_movements m join products p on p.id = m.product_id where p.name = 'Figur Pop Mart Hirono' order by m.id desc limit 1`)).rows[0];
+    if (!/Import Excel/.test(mv?.note || '')) throw new Error('Mutasi stok import tidak tercatat di kartu stok');
+    step('export Excel (3 sheet + dropdown) → import: file error ditolak, file valid diterapkan (harga, status, stok, barang baru)');
+  }
+
   // ---------- penjual melihat penjualan ----------
   await seller.goto(BASE + '/sell.html#sales');
   await seller.locator('#sales .badge.ok', { hasText: 'Ditransfer Rp960.000' }).waitFor();
@@ -266,6 +328,7 @@ try {
   else console.log('\n✅ E2E lulus. Screenshot di ' + OUT);
 } catch (e) {
   console.error('❌ GAGAL:', e.message);
+  for (const [name, pg] of openPages) await pg.screenshot({ path: OUT + `GAGAL-${name}.png` }).catch(() => {});
   if (errors.length) console.log(errors.join('\n'));
   process.exitCode = 1;
 } finally {
