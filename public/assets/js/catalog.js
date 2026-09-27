@@ -3,7 +3,7 @@
 // ============================================================================
 import {
   sb, $, $$, esc, rupiah, duration, waLink, imgUrl, PLACEHOLDER, toast, modal, errText,
-  loadSettings, flag, getProfile, cart, renderNav, copyText, configured
+  loadSettings, flag, getIdentity, cart, renderNav, copyText, configured
 } from './core.js';
 
 const state = {
@@ -241,6 +241,7 @@ function cardHtml(p) {
       <div>${rating}${p.size ? `<span class="size-chip">Ukuran ${esc(p.size)}</span>` : ''}</div>
       <p class="summary">${esc(p.summary || '')}</p>
       ${priceBlock(p)}
+      ${p.donation_amount > 0 ? `<div class="donation-chip">💝 ${rupiah(p.donation_amount)} untuk donasi</div>` : ''}
       ${flash}
       <div class="actions">
         <details><summary>Detail barang</summary><div class="details-content">
@@ -280,6 +281,7 @@ function openDetail(p) {
         ${imgs.length > 1 ? `<div class="gallery-thumbs">${imgs.map((u, i) => `<img src="${esc(u)}" data-i="${i}" class="${i ? '' : 'active'}" alt="Foto ${i + 1}">`).join('')}</div>` : ''}</div>
       <div><div class="eyebrow">${esc(p.category_name || '')}</div><h3 style="margin:6px 0">${esc(p.name)}</h3>
         ${priceBlock(p)}
+        ${p.donation_amount > 0 ? `<div class="donation-chip">💝 ${rupiah(p.donation_amount)} dari penjualan ini untuk donasi</div>` : ''}
         <p class="small muted" style="margin:10px 0">${esc(p.summary || '')}</p>
         <table class="tbl"><tbody>
           <tr><td class="muted">Kondisi</td><td>${p.condition_pct == null ? 'Konfirmasi penjual' : p.condition_pct + '%'} · ${esc(p.item_condition || '-')}</td></tr>
@@ -342,8 +344,8 @@ function openCart() {
 }
 
 async function checkout() {
-  const profile = await getProfile();
-  if (!profile) { toast('Silakan masuk dulu untuk checkout'); location.href = 'login.html?next=' + encodeURIComponent('index.html#cart'); return; }
+  const profile = getIdentity();
+  if (!profile) { toast('Pilih identitas Anda dulu untuk checkout'); location.href = 'login.html?next=' + encodeURIComponent('index.html#cart'); return; }
   await refreshProducts();
   const lines = cartLines().filter((l) => l.available > 0);
   if (!lines.length) { toast('Barang di keranjang sudah habis', 'error'); return; }
@@ -369,7 +371,7 @@ async function checkout() {
       { label: 'Buat pesanan', cls: 'btn-primary', onClick: async ({ body }) => {
         const pm = Number($('input[name=pm]:checked', body)?.value);
         const items = lines.map((l) => ({ product_id: l.id, qty: Math.min(l.qty, l.available) }));
-        const { data, error } = await sb.rpc('create_order', { p_items: items, p_payment_method_id: pm, p_note: $('#co-note', body).value || null });
+        const { data, error } = await sb.rpc('create_order', { p_actor: profile.id, p_items: items, p_payment_method_id: pm, p_note: $('#co-note', body).value || null });
         if (error) throw error;
         lines.forEach((l) => cart.remove(l.id));
         toast('Pesanan dibuat! Silakan lakukan pembayaran.', 'ok');

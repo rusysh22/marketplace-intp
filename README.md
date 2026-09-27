@@ -7,13 +7,22 @@ Dilengkapi **toko 3D (Three.js)** yang terinspirasi desain toko Interport.
 | Lapisan | Teknologi |
 |---|---|
 | Database | Supabase Postgres (+ Row Level Security) |
-| Login karyawan | Supabase Auth (email + password) |
+| Identitas karyawan | **Tanpa login** — pilih nama sendiri dari daftar, tanpa password/verifikasi (lihat catatan keamanan di bawah) |
+| Login admin | Supabase Auth (email + password) — satu-satunya yang benar-benar login |
 | Foto barang & bukti bayar | Supabase Storage (kompatibel S3) |
 | Logika bisnis | Fungsi Postgres (RPC), dipanggil dari `supabase-js` |
 | Frontend | HTML + CSS + JavaScript statis (tanpa build), Three.js untuk 3D, font Plus Jakarta Sans |
 
 Tidak perlu server sendiri: folder `public/` cukup di-hosting sebagai situs statis (Netlify, Vercel,
 Cloudflare Pages, GitHub Pages, atau di-embed seperti katalog lama).
+
+> ⚠️ **Catatan keamanan (disengaja, keputusan produk):** karyawan tidak login — mereka cukup **memilih
+> namanya sendiri** dari daftar di halaman "Pilih identitas", tanpa password atau verifikasi apa pun.
+> Artinya siapa pun yang punya akses ke situs ini bisa mengaku jadi karyawan lain (submit barang,
+> checkout, isi rekening pencairan atas nama orang lain). Ini diterima karena barang **baru tayang
+> setelah admin verifikasi**, dan bukti bayar **baru dianggap lunas setelah admin verifikasi** — jadi
+> tidak ada aksi berdampak langsung yang lolos tanpa mata admin. Hanya **admin** yang tetap wajib login
+> asli (email + password via Supabase Auth) untuk masuk ke panel Admin.
 
 ---
 
@@ -66,6 +75,10 @@ Padanan istilah ERP (D365 / Odoo) supaya mudah dipetakan:
   pantry + kulkas, lampu gantung, tanaman). Setiap area = satu/lebih jenis barang; jumlah barang yang
   "dipajang" mengikuti stok tersedia. Klik area → katalog terfilter. Bisa diputar, di-zoom, dan disembunyikan.
 
+**Pilih identitas (login.html)** — karyawan cukup cari & pilih namanya dari daftar (tanpa password), lalu
+klik konfirmasi. Admin punya jalur terpisah "Saya admin, masuk dengan password" (email + password Supabase
+Auth asli).
+
 **Jual barang (sell.html)** — form multi-barang (nama, jenis dari master data, ukuran dengan saran per jenis,
 kondisi baru/preloved + slider %, harga jual, harga normal/coret, stok, deskripsi, catatan minus, hingga 5 foto
 yang otomatis dikompres), daftar "Barang saya" (status, alasan ditolak, revisi, tarik), "Penjualan saya"
@@ -77,8 +90,8 @@ hitung mundur batas bayar, unggah bukti (gambar/PDF), batalkan, status timeline.
 **Admin (admin.html)** — Dashboard, Verifikasi barang, Pesanan (verifikasi bukti bayar, siap diambil, selesai,
 batal), Produk & stok (edit, input barang titipan, penyesuaian stok dengan keterangan, kartu stok, tandai
 pilihan ★), Flash sale (jadwal + pilih barang + diskon cepat % + kuota), Pencairan penjual, Jenis barang,
-Metode pembayaran (unggah QRIS), Pengaturan, Pengguna (jadikan admin / nonaktifkan), Audit log,
-Export CSV (pesanan, produk, pencairan).
+Metode pembayaran (unggah QRIS), Pengaturan, **Pengguna** (tambah karyawan baru, jadikan admin / nonaktifkan),
+Audit log, Export CSV (pesanan, produk, pencairan).
 
 Tambahan yang saya sesuaikan dari kebutuhan awal:
 - **Stok dikunci saat checkout** dan otomatis kembali jika pesanan kedaluwarsa/dibatalkan (mencegah barang
@@ -86,7 +99,8 @@ Tambahan yang saya sesuaikan dari kebutuhan awal:
 - **Kode unik 3 digit** untuk transfer bank agar pembayaran mudah dicocokkan dengan mutasi rekening.
 - **Pencairan ke penjual** + komisi opsional, karena uang pembeli masuk ke rekening marketplace dulu.
 - **Kartu stok & audit log** otomatis untuk jejak audit.
-- **Batasan domain email** (mis. hanya `@interport.co.id`) dan buka/tutup pendaftaran.
+- **Karyawan tanpa login** — dikelola admin lewat menu Pengguna (tambah nama, tidak perlu password); admin
+  tetap wajib akun Supabase Auth asli.
 - 31 barang dari katalog statis lama sudah diimpor sebagai data awal (kode CM-xx-x, foto tetap memakai URL
   Supabase lama). Penomoran form baru melanjutkan dari **CM-26**.
 
@@ -104,9 +118,14 @@ Tambahan yang saya sesuaikan dari kebutuhan awal:
 
    Atau dengan Supabase CLI: `supabase link --project-ref <ref>` lalu `supabase db push`.
 
-### 2. Atur Auth
-**Authentication → Providers → Email**: aktif. Jika ingin tanpa verifikasi email, matikan
-*Confirm email*. **Authentication → URL Configuration → Site URL**: isi alamat situs Anda.
+### 2. Buat akun admin pertama
+Karyawan tidak mendaftar sendiri (lihat catatan keamanan di atas) — hanya **admin** yang butuh akun
+Supabase Auth asli, dan itu pun dibuat manual lewat dashboard (bukan lewat halaman aplikasi):
+1. **Authentication → Users → Add user** → isi email & password admin pertama Anda. (Boleh matikan
+   **Authentication → Providers → Email → Confirm email** juga supaya reset password lewat email tidak
+   perlu klik konfirmasi.)
+2. **Authentication → URL Configuration → Site URL**: isi alamat situs Anda.
+3. Setelah user dibuat, lanjut ke langkah 5 di bawah untuk menjadikannya admin.
 
 ### 3. Hubungkan frontend
 Isi `public/config.js` dengan **Project URL** dan **anon public key** dari
@@ -119,23 +138,29 @@ Unggah isi folder `public/` ke hosting statis mana pun, contoh:
 - **GitHub Pages**: publish folder `public`.
 - Tetap ingin di-embed di halaman lain: `<iframe src="https://situs-anda/index.html" style="width:100%;height:100vh;border:0"></iframe>`
 
-### 5. Jadikan akun Anda admin
-Daftar lewat halaman **Masuk / Daftar**, lalu jalankan sekali di SQL Editor:
+### 5. Jadikan akun itu admin
+Jalankan sekali di SQL Editor (pakai email yang Anda isi di langkah 2):
 ```sql
-update public.profiles set role = 'admin' where email = 'email-anda@interport.co.id';
+update public.profiles set role = 'admin' where email = 'email-admin-anda@interport.co.id';
 ```
-Admin berikutnya cukup diangkat dari menu **Admin → Pengguna**.
+Masuk ke `admin.html` → tab **"Saya admin, masuk dengan password"** di halaman Pilih identitas. Admin
+berikutnya: buat user lewat dashboard seperti langkah 2, lalu jadikan admin dari menu **Admin → Pengguna**
+(tombol "Jadikan admin" hanya muncul untuk akun yang sudah punya login Supabase Auth).
 
-### 6. Lengkapi master data di menu Admin
+### 6. Daftarkan karyawan
+Di menu **Admin → Pengguna → + Tambah karyawan**, isi nama (wajib) + email/departemen/WA (opsional, hanya
+label). Karyawan langsung bisa memilih namanya sendiri di halaman "Pilih identitas" — tanpa password.
+
+### 7. Lengkapi master data di menu Admin
 - **Metode pembayaran** → edit *QRIS* → unggah gambar QR → centang Aktif. Cek rekening BCA/Mandiri.
 - **Pengaturan** → nomor WhatsApp admin, info pengambilan barang, batas bayar, biaya admin, komisi,
-  domain email kantor, tampilan (3D, efek latar, gulir otomatis), footer voucher.
+  tampilan (3D, efek latar, gulir otomatis), footer voucher.
   Gulir otomatis (mode layar TV) **mati secara default**; nyalakan hanya jika katalog ditayangkan di layar TV.
   Jika seed lama (dengan gulir otomatis menyala) sudah terlanjur dijalankan, matikan dengan:
   `update public.settings set value = '0' where key = 'auto_scroll';`
 - **Jenis barang** → tambah/ubah jenis, pilihan ukuran, dan area pajangannya di toko 3D.
 
-### 7. (Opsional) Kedaluwarsa pesanan terjadwal
+### 8. (Opsional) Kedaluwarsa pesanan terjadwal
 Pesanan lewat batas bayar sudah otomatis ditutup setiap ada checkout / admin membuka dashboard. Agar tetap
 berjalan walau sepi, aktifkan ekstensi **pg_cron** (Database → Extensions) lalu:
 ```sql
@@ -162,12 +187,22 @@ dev/                        ← HANYA untuk pengembangan & pengujian lokal
 
 ## Fungsi database (RPC) utama
 
+Karyawan tidak punya sesi Supabase Auth, jadi hampir semua fungsi menerima `p_actor` (id profil yang dipilih
+di halaman "Pilih identitas") sebagai pengganti `auth.uid()` — fungsi sendiri yang memvalidasi profil itu
+aktif, bukan sistem autentikasi.
+
 | Fungsi | Dipakai oleh | Kegunaan |
 |---|---|---|
-| `submit_items(items, note)` | Penjual | Daftarkan banyak barang sekaligus, kode otomatis CM-xx-n |
+| `employee_directory()` | Halaman Pilih identitas | Daftar nama untuk dipilih (tanpa data sensitif) |
+| `my_profile(p_actor)`, `update_my_profile(p_actor, data)` | Karyawan | Lihat/ubah profil & rekening sendiri |
+| `submit_items(p_actor, items, note)` | Penjual | Daftarkan banyak barang sekaligus, kode otomatis CM-xx-n |
+| `my_products(p_actor)` | Penjual | Daftar "Barang saya" |
 | `update_my_item`, `withdraw_my_item` | Penjual | Revisi (kembali ke antrean) / tarik barang |
-| `create_order(items, payment_method_id, note)` | Pembeli | Checkout atomik: kunci stok, harga flash sale, biaya admin, kode unik |
+| `my_sales(p_actor)` | Penjual | Daftar "Penjualan saya" |
+| `create_order(p_actor, items, payment_method_id, note)` | Pembeli | Checkout atomik: kunci stok, harga flash sale, biaya admin, kode unik |
+| `my_orders(p_actor)`, `my_order_detail(p_actor, order_id)` | Pembeli | Riwayat & detail pesanan |
 | `submit_payment_proof`, `cancel_my_order` | Pembeli | Unggah bukti / batalkan |
+| `admin_create_employee(name, email, emp_id, department, phone)` | Admin | Tambah karyawan baru (tanpa password) |
 | `admin_review_product` | Admin | Setujui (dengan koreksi) / tolak |
 | `admin_verify_payment`, `admin_set_order_status` | Admin | Verifikasi bayar, siap diambil, selesai, batal |
 | `admin_adjust_stock` | Admin | Stock opname dengan keterangan |
@@ -195,3 +230,7 @@ npm test                     # reset DB → uji alur SQL → uji E2E browser (sc
 Uji E2E mencakup: daftar akun, jual 2 barang + upload foto, verifikasi admin (koreksi harga), buat flash sale,
 checkout dengan harga flash + kode unik, stok terkunci, unggah bukti bayar, verifikasi pembayaran, pesanan
 selesai, pencairan ke penjual, dan tampilan mobile.
+
+> ⚠️ `dev/test-flow.sql` dan `dev/e2e.mjs` masih ditulis untuk alur login lama (daftar akun dengan
+> password) dan belum diperbarui mengikuti model "pilih identitas tanpa login" di atas — perlu disesuaikan
+> sebelum dipakai lagi.

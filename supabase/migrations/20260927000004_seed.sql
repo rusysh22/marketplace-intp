@@ -16,8 +16,6 @@ insert into public.settings (key, value) values
   ('next_submission_no', '26'),
   ('admin_whatsapp', '6281818180823'),
   ('payment_intro', 'Bayar lewat QRIS atau transfer ke salah satu rekening berikut, lalu unggah bukti bayar di halaman Pesanan Saya.'),
-  ('allowed_email_domain', ''),
-  ('allow_registration', '1'),
   ('order_expiry_hours', '24'),
   ('admin_fee_type', 'flat'),
   ('admin_fee_value', '0'),

@@ -3,7 +3,7 @@
 // Semua akses dijaga RLS + fungsi is_admin() di database.
 // ============================================================================
 import {
-  sb, $, $$, esc, rupiah, fmtDate, toast, errText, modal, confirmDialog, promptDialog, renderNav, requireLogin,
+  sb, $, $$, esc, rupiah, fmtDate, toast, errText, modal, confirmDialog, promptDialog, renderNav, requireAdminSession,
   loadSettings, uploadFile, imgUrl, PLACEHOLDER, badge, ORDER_STATUS, PRODUCT_STATUS, copyText, waLink
 } from './core.js';
 
@@ -17,7 +17,7 @@ let profile, categories = [];
 
 (async () => {
   await renderNav('admin');
-  profile = await requireLogin();
+  profile = await requireAdminSession();
   if (!profile) return;
   if (profile.role !== 'admin') {
     main().innerHTML = '<div class="panel empty"><strong>Khusus admin marketplace</strong>Minta admin yang ada untuk menjadikan akun Anda admin (menu Pengguna).</div>';
@@ -145,6 +145,7 @@ async function review() {
             <label class="field"><span>Harga jual</span><input type="number" name="price" value="${p.price}" min="0"></label>
             <label class="field"><span>Harga coret</span><input type="number" name="original_price" value="${p.original_price ?? ''}" min="0"></label>
             <label class="field"><span>Stok</span><input type="number" name="stock" value="${p.stock}" min="0"></label>
+            <label class="field"><span>Nominal donasi</span><input type="number" name="donation_amount" value="${p.donation_amount ?? 0}" min="0"></label>
           </div>
           <div class="btn-row" style="margin-top:12px"><button class="btn btn-primary" data-approve>✓ Setujui & tayangkan</button><button class="btn btn-danger" data-reject>✕ Tolak</button></div>
         </div></div>`;
@@ -156,7 +157,7 @@ async function review() {
       const v = (n) => $(`[name=${n}]`, card).value;
       e.target.disabled = true;
       const { error } = await sb.rpc('admin_review_product', { p_id: id, p_action: 'approve', p_reason: null,
-        p_patch: { category_id: Number(v('category_id')), price: Number(v('price')), original_price: v('original_price'), stock: Number(v('stock')) } });
+        p_patch: { category_id: Number(v('category_id')), price: Number(v('price')), original_price: v('original_price'), stock: Number(v('stock')), donation_amount: Number(v('donation_amount')) || 0 } });
       if (error) { e.target.disabled = false; return toast(errText(error), 'error'); }
       toast('Barang ditayangkan', 'ok'); card.remove(); refreshCounts();
     };
@@ -261,14 +262,14 @@ async function products() {
     <div class="table-wrap"><table class="tbl"><thead><tr><th></th><th>Kode</th><th>Barang</th><th>Jenis</th><th>Penjual</th><th class="num">Harga</th><th class="num">Stok</th><th>Status</th><th></th></tr></thead><tbody>
     ${list.map((p) => `<tr data-id="${p.id}"><td><img class="thumb" src="${esc(firstImg(p) ? imgUrl(firstImg(p)) : PLACEHOLDER)}" alt="" loading="lazy"></td>
       <td class="nowrap">${esc(p.code || '')}</td><td>${esc(p.name)} ${p.featured ? '<span class="badge warn">★</span>' : ''}</td><td>${esc(catName(p.category_id))}</td><td>${esc(p.seller_name || '-')}</td>
-      <td class="num">${p.original_price ? `<del class="small muted">${rupiah(p.original_price)}</del><br>` : ''}${rupiah(p.price)}</td>
+      <td class="num">${p.original_price ? `<del class="small muted">${rupiah(p.original_price)}</del><br>` : ''}${rupiah(p.price)}${p.donation_amount > 0 ? `<div class="small" style="color:var(--danger)">💝 ${rupiah(p.donation_amount)}</div>` : ''}</td>
       <td class="num"><strong>${p.stock}</strong></td><td>${badge(PRODUCT_STATUS, p.status)}</td>
       <td class="nowrap"><button class="btn btn-ghost btn-sm" data-edit>Edit</button> <button class="btn btn-ghost btn-sm" data-stock>Stok</button> <button class="btn btn-ghost btn-sm" data-card>Kartu stok</button></td></tr>`).join('')}
     </tbody></table></div>`;
   $('[data-status]').onchange = (e) => { prodFilter.status = e.target.value; products(); };
   $('[data-q]').onchange = (e) => { prodFilter.q = e.target.value; products(); };
   $('[data-new]').onclick = () => editProduct(null);
-  $('[data-export]').onclick = () => downloadCsv('produk.csv', list.map((p) => ({ kode: p.code, nama: p.name, jenis: catName(p.category_id), penjual: p.seller_name, kondisi: p.item_condition, kondisi_pct: p.condition_pct, ukuran: p.size, harga_normal: p.original_price, harga: p.price, stok: p.stock, status: p.status })));
+  $('[data-export]').onclick = () => downloadCsv('produk.csv', list.map((p) => ({ kode: p.code, nama: p.name, jenis: catName(p.category_id), penjual: p.seller_name, kondisi: p.item_condition, kondisi_pct: p.condition_pct, ukuran: p.size, harga_normal: p.original_price, harga: p.price, donasi: p.donation_amount, stok: p.stock, status: p.status })));
   $$('tr[data-id]').forEach((tr) => {
     const p = list.find((x) => x.id === Number(tr.dataset.id));
     $('[data-edit]', tr).onclick = () => editProduct(p);
@@ -287,6 +288,7 @@ const PRODUCT_FIELDS = () => [
   { k: 'condition_pct', label: 'Kondisi (%)', type: 'number' },
   { k: 'price', label: 'Harga jual', type: 'number', req: true },
   { k: 'original_price', label: 'Harga coret (normal)', type: 'number' },
+  { k: 'donation_amount', label: 'Nominal donasi', type: 'number', help: 'Bagian dari hasil penjualan yang didonasikan' },
   { k: 'status', label: 'Status', type: 'select', options: Object.entries(PRODUCT_STATUS).map(([k, [l]]) => [k, l]) },
   { k: 'sort_order', label: 'Urutan tampil', type: 'number', help: 'Angka kecil tampil lebih dulu' },
   { k: 'featured', label: 'Tandai sebagai pilihan (★)', type: 'check' },
@@ -592,9 +594,6 @@ const SETTING_GROUPS = [
     { k: 'admin_fee_type', label: 'Tipe biaya admin', type: 'select', options: [['flat', 'Nominal (Rp)'], ['percent', 'Persen (%)']] },
     { k: 'admin_fee_value', label: 'Biaya admin', type: 'number' }, { k: 'use_unique_code', label: 'Kode unik 3 digit untuk transfer bank', type: 'check' },
     { k: 'commission_percent', label: 'Komisi dari penjual (%)', type: 'number', help: '0 = 100% hasil penjualan untuk penjual' }]],
-  ['Akun', [
-    { k: 'allow_registration', label: 'Izinkan pendaftaran akun baru', type: 'check' },
-    { k: 'allowed_email_domain', label: 'Batasi domain email', help: 'Mis. interport.co.id — kosongkan untuk bebas' }]],
   ['Footer voucher', [
     { k: 'footer_enabled', label: 'Tampilkan footer', type: 'check' }, { k: 'footer_kicker', label: 'Kicker' }, { k: 'footer_title', label: 'Judul', span: 'span-2' },
     { k: 'footer_text', label: 'Teks', type: 'textarea', span: 'span-all' }, { k: 'footer_embed_url', label: 'URL embed (Canva, dsb.)', span: 'span-all' },
@@ -625,14 +624,35 @@ async function settingsSec() {
 // ============================================================================
 async function users() {
   const data = unwrap(await sb.from('profiles').select('*').order('created_at', { ascending: false }));
-  main().innerHTML = head('Pengguna', `${data.length} akun. Jadikan admin atau nonaktifkan akun di sini.`) + `
+  main().innerHTML = head('Pengguna', `${data.length} akun. Tambah karyawan (tanpa password — mereka pilih namanya sendiri di halaman "Pilih identitas"), jadikan admin, atau nonaktifkan akun di sini.`,
+    '<button class="btn btn-primary btn-sm" data-add-employee>+ Tambah karyawan</button>') + `
     <div class="filter-bar"><input type="search" data-q placeholder="Cari nama / email / departemen"></div>
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Nama</th><th>Email</th><th>Departemen</th><th>WA</th><th>Rekening</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>
     ${data.map((u) => `<tr data-id="${u.id}" data-s="${esc([u.name, u.email, u.department, u.emp_id].join(' ').toLowerCase())}"><td>${esc(u.name)}<div class="small muted">${esc(u.emp_id || '')}</div></td><td>${esc(u.email || '')}</td><td>${esc(u.department || '')}</td><td>${esc(u.phone || '')}</td>
-      <td class="small">${u.bank_account ? esc(`${u.bank_name || ''} ${u.bank_account}`) : '-'}</td><td>${u.role === 'admin' ? '<span class="badge dark">Admin</span>' : 'Karyawan'}</td>
+      <td class="small">${u.bank_account ? esc(`${u.bank_name || ''} ${u.bank_account}`) : '-'}</td><td>${u.role === 'admin' ? '<span class="badge dark">Admin</span>' : 'Karyawan'}${u.has_login ? '' : '<div class="small muted">Tanpa login</div>'}</td>
       <td>${u.active ? '<span class="badge ok">Aktif</span>' : '<span class="badge danger">Nonaktif</span>'}</td>
-      <td class="nowrap">${u.id === profile.id ? '<span class="small muted">(Anda)</span>' : `<button class="btn btn-ghost btn-sm" data-role>${u.role === 'admin' ? 'Jadikan karyawan' : 'Jadikan admin'}</button> <button class="btn btn-ghost btn-sm" data-active>${u.active ? 'Nonaktifkan' : 'Aktifkan'}</button>`}</td></tr>`).join('')}
+      <td class="nowrap">${u.id === profile.id ? '<span class="small muted">(Anda)</span>' : `
+        ${u.has_login ? `<button class="btn btn-ghost btn-sm" data-role>${u.role === 'admin' ? 'Jadikan karyawan' : 'Jadikan admin'}</button>` : '<span class="small muted" title="Buat akun lewat Supabase Dashboard → Authentication dulu supaya bisa jadi admin">Tanpa akun login</span>'}
+        <button class="btn btn-ghost btn-sm" data-active>${u.active ? 'Nonaktifkan' : 'Aktifkan'}</button>`}</td></tr>`).join('')}
     </tbody></table></div>`;
+  $('[data-add-employee]').onclick = () => {
+    modal({
+      title: 'Tambah karyawan', body: `<div class="grid-form">
+        <label class="field span-all"><span class="req">Nama lengkap</span><input type="text" name="name" required></label>
+        <label class="field"><span>NIK / ID karyawan</span><input type="text" name="emp_id"></label>
+        <label class="field"><span>Departemen</span><input type="text" name="department"></label>
+        <label class="field"><span>Email (label saja, opsional)</span><input type="email" name="email"></label>
+        <label class="field"><span>No. WhatsApp</span><input type="tel" name="phone"></label>
+      </div>`,
+      actions: [{ label: 'Batal' }, { label: 'Tambah', cls: 'btn-primary', onClick: async ({ body }) => {
+        const v = (n) => $(`[name=${n}]`, body).value.trim();
+        if (!v('name')) { toast('Nama wajib diisi', 'error'); return false; }
+        const { error } = await sb.rpc('admin_create_employee', { p_name: v('name'), p_email: v('email') || null, p_emp_id: v('emp_id') || null, p_department: v('department') || null, p_phone: v('phone') || null });
+        if (error) throw error;
+        toast('Karyawan ditambahkan', 'ok'); users();
+      } }]
+    });
+  };
   $('[data-q]').oninput = (e) => $$('tr[data-s]').forEach((tr) => (tr.hidden = !tr.dataset.s.includes(e.target.value.toLowerCase())));
   $$('tr[data-id]').forEach((tr) => {
     const u = data.find((x) => x.id === tr.dataset.id);

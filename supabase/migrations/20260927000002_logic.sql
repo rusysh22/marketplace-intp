@@ -17,9 +17,16 @@ language sql stable security definer set search_path = public as $$
   select coalesce((select value from public.settings where key = p_key), p_default);
 $$;
 
-create or replace function public.log_audit(p_action text, p_entity text, p_entity_id bigint, p_detail jsonb default null)
+create or replace function public.log_audit(p_action text, p_entity text, p_entity_id bigint, p_detail jsonb default null, p_actor uuid default auth.uid())
 returns void language sql security definer set search_path = public as $$
-  insert into public.audit_log (user_id, action, entity, entity_id, detail) values (auth.uid(), p_action, p_entity, p_entity_id, p_detail);
+  insert into public.audit_log (user_id, action, entity, entity_id, detail) values (p_actor, p_action, p_entity, p_entity_id, p_detail);
+$$;
+
+-- Karyawan tidak punya sesi Supabase Auth (auth.uid() null); fungsi yang dipanggil
+-- atas nama karyawan menaruh id-nya di sini supaya trigger/log tetap tercatat.
+create or replace function public.current_actor() returns uuid
+language sql stable as $$
+  select coalesce(auth.uid(), nullif(current_setting('app.actor_id', true), '')::uuid);
 $$;
 
 create or replace function public.touch_updated_at() returns trigger language plpgsql as $$
@@ -33,44 +40,24 @@ drop trigger if exists settings_touch on public.settings;
 create trigger settings_touch before update on public.settings for each row execute function public.touch_updated_at();
 
 -- ---------------------------------------------------------------------------
--- Profil otomatis saat karyawan mendaftar (Supabase Auth)
+-- Profil otomatis saat akun Supabase Auth dibuat.
+-- HANYA dipakai untuk admin (dibuat lewat Supabase Dashboard -> Authentication ->
+-- Add user, lalu dipromosikan jadi admin lewat SQL, lihat README). Karyawan tidak
+-- pakai jalur ini sama sekali -- profilnya dibuat admin lewat admin_create_employee().
 -- ---------------------------------------------------------------------------
 create or replace function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
-  v_domain text := lower(trim(coalesce(public.setting('allowed_email_domain'), '')));
   v_meta jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
 begin
-  if coalesce(public.setting('allow_registration', '1'), '1') <> '1' then
-    raise exception 'Pendaftaran akun sedang ditutup admin';
-  end if;
-  if v_domain <> '' and lower(split_part(new.email, '@', 2)) <> ltrim(v_domain, '@') then
-    raise exception 'Gunakan email kantor @%', ltrim(v_domain, '@');
-  end if;
-  insert into public.profiles (id, email, name, emp_id, phone, department)
-  values (new.id, new.email,
-          coalesce(nullif(v_meta ->> 'name', ''), split_part(new.email, '@', 1)),
-          v_meta ->> 'emp_id', v_meta ->> 'phone', v_meta ->> 'department')
-  on conflict (id) do nothing;
+  insert into public.profiles (id, email, name, has_login)
+  values (new.id, new.email, coalesce(nullif(v_meta ->> 'name', ''), nullif(v_meta ->> 'full_name', ''), split_part(new.email, '@', 1)), true)
+  on conflict (id) do update set has_login = true;
   return new;
 end $$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
-
--- Karyawan boleh edit profilnya sendiri, tapi tidak boleh mengubah role/status aktif.
-create or replace function public.protect_profile() returns trigger
-language plpgsql security definer set search_path = public as $$
-begin
-  if not public.is_admin() and auth.uid() is not null then
-    new.role := old.role;
-    new.active := old.active;
-    new.email := old.email;
-  end if;
-  return new;
-end $$;
-drop trigger if exists profiles_protect on public.profiles;
-create trigger profiles_protect before update on public.profiles for each row execute function public.protect_profile();
 
 -- ---------------------------------------------------------------------------
 -- Kartu stok otomatis: setiap perubahan kolom stock tercatat di stock_movements.
@@ -81,14 +68,14 @@ language plpgsql security definer set search_path = public as $$
 begin
   if tg_op = 'INSERT' then
     insert into public.stock_movements (product_id, qty_change, balance, type, ref, note, user_id)
-    values (new.id, new.stock, new.stock, 'initial', new.code, nullif(current_setting('app.stock_note', true), ''), auth.uid());
+    values (new.id, new.stock, new.stock, 'initial', new.code, nullif(current_setting('app.stock_note', true), ''), public.current_actor());
   elsif new.stock is distinct from old.stock then
     insert into public.stock_movements (product_id, qty_change, balance, type, ref, note, user_id)
     values (new.id, new.stock - old.stock, new.stock,
             coalesce(nullif(current_setting('app.stock_type', true), ''), 'adjust'),
             nullif(current_setting('app.stock_ref', true), ''),
             nullif(current_setting('app.stock_note', true), ''),
-            auth.uid());
+            public.current_actor());
   end if;
   return new;
 end $$;
@@ -126,7 +113,8 @@ select
   f.quota as flash_quota, f.sold as flash_sold,
   coalesce(f.active_now, false) as flash_active,
   case when f.active_now then f.flash_price else p.price end as effective_price,
-  coalesce((select json_agg(i.path order by i.sort, i.id) from public.product_images i where i.product_id = p.id), '[]'::json) as images
+  coalesce((select json_agg(i.path order by i.sort, i.id) from public.product_images i where i.product_id = p.id), '[]'::json) as images,
+  p.donation_amount
 from public.products p
 left join public.categories c on c.id = p.category_id
 left join lateral (
@@ -145,10 +133,10 @@ where p.status = 'published';
 -- p_items: [{name, category_id, size, item_condition, condition_pct, original_price,
 --            price, stock, summary, condition_note, images: ["<uid>/file.jpg", ...]}]
 -- ---------------------------------------------------------------------------
-create or replace function public.submit_items(p_items jsonb, p_note text default null) returns jsonb
+create or replace function public.submit_items(p_actor uuid, p_items jsonb, p_note text default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
-  v_uid uuid := auth.uid();
+  v_uid uuid := p_actor;
   v_profile public.profiles;
   v_max int := coalesce(public.setting('max_items_per_submission')::int, 10);
   v_max_photos int := coalesce(public.setting('max_photos_per_item')::int, 5);
@@ -164,9 +152,10 @@ declare
   v_img text;
   v_n int;
 begin
-  if v_uid is null then raise exception 'Silakan login terlebih dahulu'; end if;
+  if v_uid is null then raise exception 'Pilih identitas Anda terlebih dahulu'; end if;
   select * into v_profile from public.profiles where id = v_uid and active;
   if not found then raise exception 'Akun tidak aktif'; end if;
+  perform set_config('app.actor_id', v_uid::text, true);
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then raise exception 'Minimal satu barang'; end if;
   if jsonb_array_length(p_items) > v_max then raise exception 'Maksimal % barang per pengajuan', v_max; end if;
 
@@ -180,6 +169,7 @@ begin
       raise exception 'Barang #%: jenis barang tidak valid', v_idx;
     end if;
     if coalesce((v_item ->> 'price')::bigint, -1) < 0 then raise exception 'Barang #%: harga tidak valid', v_idx; end if;
+    if coalesce((v_item ->> 'donation_amount')::bigint, 0) < 0 then raise exception 'Barang #%: nominal donasi tidak valid', v_idx; end if;
     if coalesce((v_item ->> 'condition_pct')::int, -1) not between 0 and 100 then raise exception 'Barang #%: kondisi harus 0-100 persen', v_idx; end if;
     if (v_item ->> 'condition_pct')::int < v_min_cond then raise exception 'Barang #%: kondisi minimal % persen', v_idx, v_min_cond; end if;
     v_n := coalesce(jsonb_array_length(v_item -> 'images'), 0);
@@ -188,10 +178,11 @@ begin
 
     v_code := v_prefix || '-' || lpad(v_form::text, 2, '0') || '-' || v_idx;
     insert into public.products (code, submission_id, seller_id, seller_name, category_id, name, size, item_condition,
-      condition_pct, original_price, price, stock, summary, condition_note, status)
+      condition_pct, original_price, price, donation_amount, stock, summary, condition_note, status)
     values (v_code, v_sub, v_uid, v_profile.name, (v_item ->> 'category_id')::bigint, trim(v_item ->> 'name'),
       nullif(trim(v_item ->> 'size'), ''), coalesce(nullif(v_item ->> 'item_condition', ''), 'preloved'),
       (v_item ->> 'condition_pct')::int, nullif(v_item ->> 'original_price', '')::bigint, (v_item ->> 'price')::bigint,
+      coalesce((v_item ->> 'donation_amount')::bigint, 0),
       greatest(1, coalesce((v_item ->> 'stock')::int, 1)), v_item ->> 'summary', v_item ->> 'condition_note', 'pending')
     returning id into v_pid;
 
@@ -204,19 +195,21 @@ begin
     v_codes := v_codes || v_code;
   end loop;
 
-  perform public.log_audit('submit_items', 'submission', v_sub, jsonb_build_object('codes', v_codes));
+  perform public.log_audit('submit_items', 'submission', v_sub, jsonb_build_object('codes', v_codes), v_uid);
   return jsonb_build_object('submission_id', v_sub, 'form_no', v_form, 'codes', to_jsonb(v_codes));
 end $$;
 
 -- PENJUAL: revisi barang yang masih pending / ditolak -> kembali ke antrean verifikasi
-create or replace function public.update_my_item(p_id bigint, p_data jsonb) returns void
+create or replace function public.update_my_item(p_actor uuid, p_id bigint, p_data jsonb) returns void
 language plpgsql security definer set search_path = public as $$
 declare
   v_p public.products;
   v_img text;
   v_n int := 0;
 begin
-  select * into v_p from public.products where id = p_id and seller_id = auth.uid() for update;
+  if not exists (select 1 from public.profiles where id = p_actor and active) then raise exception 'Identitas tidak valid'; end if;
+  perform set_config('app.actor_id', p_actor::text, true);
+  select * into v_p from public.products where id = p_id and seller_id = p_actor for update;
   if not found then raise exception 'Barang tidak ditemukan'; end if;
   if v_p.status not in ('pending', 'rejected') then raise exception 'Barang yang sudah tayang hanya bisa diubah admin'; end if;
   update public.products set
@@ -227,6 +220,7 @@ begin
     condition_pct = coalesce((p_data ->> 'condition_pct')::int, condition_pct),
     original_price = case when p_data ? 'original_price' then nullif(p_data ->> 'original_price', '')::bigint else original_price end,
     price = coalesce((p_data ->> 'price')::bigint, price),
+    donation_amount = case when p_data ? 'donation_amount' then coalesce((p_data ->> 'donation_amount')::bigint, 0) else donation_amount end,
     summary = coalesce(p_data ->> 'summary', summary),
     condition_note = coalesce(p_data ->> 'condition_note', condition_note),
     status = 'pending', reject_reason = null
@@ -237,28 +231,28 @@ begin
   if jsonb_typeof(p_data -> 'images') = 'array' and jsonb_array_length(p_data -> 'images') > 0 then
     delete from public.product_images where product_id = p_id;
     for v_img in select jsonb_array_elements_text(p_data -> 'images') loop
-      if split_part(v_img, '/', 1) <> auth.uid()::text and v_img !~ '^https?://' then raise exception 'Foto tidak valid'; end if;
+      if split_part(v_img, '/', 1) <> p_actor::text and v_img !~ '^https?://' then raise exception 'Foto tidak valid'; end if;
       insert into public.product_images (product_id, path, sort) values (p_id, v_img, v_n);
       v_n := v_n + 1;
     end loop;
   end if;
-  perform public.log_audit('update_my_item', 'product', p_id, p_data - 'images');
+  perform public.log_audit('update_my_item', 'product', p_id, p_data - 'images', p_actor);
 end $$;
 
 -- PENJUAL: tarik barang (pending/ditolak dihapus, yang tayang disembunyikan)
-create or replace function public.withdraw_my_item(p_id bigint) returns text
+create or replace function public.withdraw_my_item(p_actor uuid, p_id bigint) returns text
 language plpgsql security definer set search_path = public as $$
 declare v_p public.products;
 begin
-  select * into v_p from public.products where id = p_id and seller_id = auth.uid() for update;
+  select * into v_p from public.products where id = p_id and seller_id = p_actor for update;
   if not found then raise exception 'Barang tidak ditemukan'; end if;
   if v_p.status in ('pending', 'rejected') and not exists (select 1 from public.order_items where product_id = p_id) then
     delete from public.products where id = p_id;
-    perform public.log_audit('withdraw_item', 'product', p_id, jsonb_build_object('code', v_p.code, 'result', 'deleted'));
+    perform public.log_audit('withdraw_item', 'product', p_id, jsonb_build_object('code', v_p.code, 'result', 'deleted'), p_actor);
     return 'deleted';
   end if;
   update public.products set status = 'hidden' where id = p_id;
-  perform public.log_audit('withdraw_item', 'product', p_id, jsonb_build_object('code', v_p.code, 'result', 'hidden'));
+  perform public.log_audit('withdraw_item', 'product', p_id, jsonb_build_object('code', v_p.code, 'result', 'hidden'), p_actor);
   return 'hidden';
 end $$;
 
@@ -304,10 +298,10 @@ begin
 end $$;
 
 -- PEMBELI: checkout. p_items: [{product_id, qty}]
-create or replace function public.create_order(p_items jsonb, p_payment_method_id bigint, p_note text default null) returns jsonb
+create or replace function public.create_order(p_actor uuid, p_items jsonb, p_payment_method_id bigint, p_note text default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
-  v_uid uuid := auth.uid();
+  v_uid uuid := p_actor;
   v_buyer public.profiles;
   v_pm public.payment_methods;
   v_item jsonb;
@@ -324,9 +318,10 @@ declare
   v_lines jsonb := '[]'::jsonb;
   v_line jsonb;
 begin
-  if v_uid is null then raise exception 'Silakan login untuk membeli'; end if;
+  if v_uid is null then raise exception 'Pilih identitas Anda untuk membeli'; end if;
   select * into v_buyer from public.profiles where id = v_uid and active;
   if not found then raise exception 'Akun tidak aktif'; end if;
+  perform set_config('app.actor_id', v_uid::text, true);
   select * into v_pm from public.payment_methods where id = p_payment_method_id and active;
   if not found then raise exception 'Metode pembayaran tidak tersedia'; end if;
   if jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then raise exception 'Keranjang kosong'; end if;
@@ -387,35 +382,35 @@ begin
   perform set_config('app.stock_ref', '', true);
   perform set_config('app.stock_note', '', true);
 
-  perform public.log_audit('create_order', 'order', v_order_id, jsonb_build_object('code', v_code, 'total', v_subtotal + v_fee + v_unique));
+  perform public.log_audit('create_order', 'order', v_order_id, jsonb_build_object('code', v_code, 'total', v_subtotal + v_fee + v_unique), v_uid);
   return jsonb_build_object('order_id', v_order_id, 'code', v_code, 'total', v_subtotal + v_fee + v_unique);
 end $$;
 
 -- PEMBELI: unggah bukti bayar (file sudah di-upload ke bucket payment-proofs/<uid>/...)
-create or replace function public.submit_payment_proof(p_order_id bigint, p_path text) returns void
+create or replace function public.submit_payment_proof(p_actor uuid, p_order_id bigint, p_path text) returns void
 language plpgsql security definer set search_path = public as $$
 declare v_o public.orders;
 begin
-  select * into v_o from public.orders where id = p_order_id and buyer_id = auth.uid() for update;
+  select * into v_o from public.orders where id = p_order_id and buyer_id = p_actor for update;
   if not found then raise exception 'Pesanan tidak ditemukan'; end if;
   if v_o.status not in ('waiting_payment', 'waiting_verification') then raise exception 'Pesanan tidak menunggu pembayaran'; end if;
   if v_o.status = 'waiting_payment' and v_o.expires_at < now() then raise exception 'Batas waktu pembayaran sudah lewat'; end if;
-  if split_part(p_path, '/', 1) <> auth.uid()::text then raise exception 'File bukti tidak valid'; end if;
   update public.orders set proof_path = p_path, status = 'waiting_verification' where id = p_order_id;
-  perform public.log_audit('submit_payment_proof', 'order', p_order_id, null);
+  perform public.log_audit('submit_payment_proof', 'order', p_order_id, null, p_actor);
 end $$;
 
 -- PEMBELI: batalkan pesanan yang belum dibayar
-create or replace function public.cancel_my_order(p_order_id bigint) returns void
+create or replace function public.cancel_my_order(p_actor uuid, p_order_id bigint) returns void
 language plpgsql security definer set search_path = public as $$
 declare v_o public.orders;
 begin
-  select * into v_o from public.orders where id = p_order_id and buyer_id = auth.uid() for update;
+  select * into v_o from public.orders where id = p_order_id and buyer_id = p_actor for update;
   if not found then raise exception 'Pesanan tidak ditemukan'; end if;
   if v_o.status <> 'waiting_payment' then raise exception 'Pesanan tidak bisa dibatalkan (status %)', v_o.status; end if;
+  perform set_config('app.actor_id', p_actor::text, true);
   update public.orders set status = 'cancelled', admin_note = 'Dibatalkan pembeli' where id = p_order_id;
   perform public.release_order_stock(p_order_id, 'Dibatalkan pembeli');
-  perform public.log_audit('cancel_order', 'order', p_order_id, null);
+  perform public.log_audit('cancel_order', 'order', p_order_id, null, p_actor);
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -441,6 +436,7 @@ begin
       category_id = coalesce((p_patch ->> 'category_id')::bigint, category_id),
       price = coalesce((p_patch ->> 'price')::bigint, price),
       original_price = case when p_patch ? 'original_price' then nullif(p_patch ->> 'original_price', '')::bigint else original_price end,
+      donation_amount = case when p_patch ? 'donation_amount' then coalesce((p_patch ->> 'donation_amount')::bigint, 0) else donation_amount end,
       status = 'published', reject_reason = null, reviewed_by = auth.uid(), reviewed_at = now(),
       published_at = coalesce(published_at, now())
     where id = p_id;
@@ -569,10 +565,89 @@ begin
   return v;
 end $$;
 
--- Penjual melihat penjualannya (tanpa membuka data pembeli selain nama)
-create or replace view public.my_sales as
-select oi.id, oi.code, oi.name, oi.qty, oi.price, oi.payout_status, oi.payout_amount, oi.payout_at, oi.payout_ref,
-       o.code as order_code, o.status as order_status, o.buyer_name, o.created_at, o.paid_at
-from public.order_items oi
-join public.orders o on o.id = oi.order_id
-where oi.seller_id = auth.uid();
+-- Admin menambah karyawan baru (tanpa password/akun auth -- dipilih sendiri lewat
+-- halaman "Masuk sebagai"). Email hanya label, tidak dipakai untuk autentikasi.
+create or replace function public.admin_create_employee(p_name text, p_email text default null, p_emp_id text default null,
+  p_department text default null, p_phone text default null) returns public.profiles
+language plpgsql security definer set search_path = public as $$
+declare v_p public.profiles;
+begin
+  perform public.assert_admin();
+  if coalesce(trim(p_name), '') = '' then raise exception 'Nama wajib diisi'; end if;
+  insert into public.profiles (name, email, emp_id, department, phone, role, has_login)
+  values (trim(p_name), nullif(trim(p_email), ''), nullif(trim(p_emp_id), ''), nullif(trim(p_department), ''), nullif(trim(p_phone), ''), 'employee', false)
+  returning * into v_p;
+  perform public.log_audit('create_employee', 'profile', null, jsonb_build_object('id', v_p.id, 'name', v_p.name));
+  return v_p;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Identitas karyawan (tanpa login): pilih dari daftar, tanpa password/OTP.
+-- Verifikasi tetap ada di sisi admin sebelum barang tayang / bukti bayar disetujui.
+-- ---------------------------------------------------------------------------
+create or replace function public.employee_directory() returns table(id uuid, name text, email text, department text)
+language sql stable security definer set search_path = public as $$
+  select id, name, email, department from public.profiles where active order by name;
+$$;
+
+create or replace function public.my_profile(p_actor uuid) returns public.profiles
+language sql stable security definer set search_path = public as $$
+  select * from public.profiles where id = p_actor and active;
+$$;
+
+create or replace function public.update_my_profile(p_actor uuid, p_data jsonb) returns public.profiles
+language plpgsql security definer set search_path = public as $$
+declare v_p public.profiles;
+begin
+  if not exists (select 1 from public.profiles where id = p_actor and active) then raise exception 'Identitas tidak valid'; end if;
+  update public.profiles set
+    name = coalesce(nullif(trim(p_data ->> 'name'), ''), name),
+    emp_id = case when p_data ? 'emp_id' then nullif(trim(p_data ->> 'emp_id'), '') else emp_id end,
+    department = case when p_data ? 'department' then nullif(trim(p_data ->> 'department'), '') else department end,
+    phone = case when p_data ? 'phone' then nullif(trim(p_data ->> 'phone'), '') else phone end,
+    bank_name = case when p_data ? 'bank_name' then nullif(trim(p_data ->> 'bank_name'), '') else bank_name end,
+    bank_account = case when p_data ? 'bank_account' then nullif(trim(p_data ->> 'bank_account'), '') else bank_account end,
+    bank_holder = case when p_data ? 'bank_holder' then nullif(trim(p_data ->> 'bank_holder'), '') else bank_holder end
+  where id = p_actor
+  returning * into v_p;
+  return v_p;
+end $$;
+
+-- Barang milik karyawan yang sedang "masuk sebagai" p_actor
+create or replace function public.my_products(p_actor uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(x order by x.created_at desc), '[]'::jsonb) from (
+    select p.*, c.name as category_name,
+      coalesce((select jsonb_agg(jsonb_build_object('path', i.path, 'sort', i.sort) order by i.sort) from public.product_images i where i.product_id = p.id), '[]'::jsonb) as product_images
+    from public.products p left join public.categories c on c.id = p.category_id
+    where p.seller_id = p_actor
+  ) x;
+$$;
+
+-- Penjualan milik karyawan (tanpa membuka data pembeli selain nama)
+create or replace function public.my_sales(p_actor uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(x order by x.created_at desc), '[]'::jsonb) from (
+    select oi.id, oi.code, oi.name, oi.qty, oi.price, oi.payout_status, oi.payout_amount, oi.payout_at, oi.payout_ref,
+           o.code as order_code, o.status as order_status, o.buyer_name, o.created_at, o.paid_at
+    from public.order_items oi join public.orders o on o.id = oi.order_id
+    where oi.seller_id = p_actor
+  ) x;
+$$;
+
+-- Pesanan milik karyawan (sebagai pembeli)
+create or replace function public.my_orders(p_actor uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(x order by x.created_at desc), '[]'::jsonb) from (
+    select o.*,
+      coalesce((select jsonb_agg(jsonb_build_object('name', i.name, 'qty', i.qty, 'price', i.price)) from public.order_items i where i.order_id = o.id), '[]'::jsonb) as order_items
+    from public.orders o where o.buyer_id = p_actor
+  ) x;
+$$;
+
+create or replace function public.my_order_detail(p_actor uuid, p_order_id bigint) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select to_jsonb(o) || jsonb_build_object('order_items',
+      coalesce((select jsonb_agg(to_jsonb(i)) from public.order_items i where i.order_id = o.id), '[]'::jsonb))
+  from public.orders o where o.id = p_order_id and o.buyer_id = p_actor;
+$$;

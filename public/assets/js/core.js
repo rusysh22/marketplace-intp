@@ -147,7 +147,7 @@ export async function loadSettings(force = false) {
 }
 export const flag = (s, k) => String(s?.[k] ?? '') === '1';
 
-// ---------- sesi & profil ----------
+// ---------- sesi admin (satu-satunya yang pakai Supabase Auth: email + password) ----------
 let profileCache;
 export async function getProfile(force = false) {
   if (profileCache !== undefined && !force) return profileCache;
@@ -157,15 +157,37 @@ export async function getProfile(force = false) {
   profileCache = data ? { ...data, email: data.email || session.user.email } : { id: session.user.id, email: session.user.email, name: session.user.email, role: 'employee' };
   return profileCache;
 }
-export async function requireLogin() {
+export async function requireAdminSession() {
   const p = await getProfile();
-  if (!p) { location.href = 'login.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search); return null; }
+  if (!p) { location.href = 'login.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search + location.hash); return null; }
   return p;
 }
-export async function logout() {
+export async function logoutAdmin() {
   await sb.auth.signOut();
   profileCache = null;
   location.href = 'index.html';
+}
+
+// ---------- identitas karyawan: pilih dari daftar, TANPA password/verifikasi ----------
+// Disengaja: barang baru tayang setelah admin verifikasi, jadi risiko orang lain
+// "mengaku" jadi karyawan lain diterima demi kemudahan (lihat README).
+const IDENTITY_KEY = 'cm_identity_v1';
+export function getIdentity() {
+  try { return JSON.parse(localStorage.getItem(IDENTITY_KEY)); } catch { return null; }
+}
+export function setIdentity(profile) {
+  try { localStorage.setItem(IDENTITY_KEY, JSON.stringify(profile)); } catch {}
+}
+export function clearIdentity() {
+  try { localStorage.removeItem(IDENTITY_KEY); } catch {}
+}
+export async function requireIdentity() {
+  const cur = getIdentity();
+  if (!cur) { location.href = 'login.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search + location.hash); return null; }
+  const { data, error } = await sb.rpc('my_profile', { p_actor: cur.id });
+  if (error || !data) { clearIdentity(); location.href = 'login.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search + location.hash); return null; }
+  setIdentity(data);
+  return data;
 }
 
 // ---------- keranjang (disimpan di browser) ----------
@@ -203,12 +225,11 @@ export async function compressImage(file, max = 1600, quality = 0.85) {
 }
 
 export async function uploadFile(bucket, file, { folder, compress = true } = {}) {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) throw new Error('Silakan login terlebih dahulu');
+  if (!folder) throw new Error('Pilih identitas Anda terlebih dahulu');
   const f = compress ? await compressImage(file) : file;
   if (f.size > 5 * 1024 * 1024) throw new Error(`File "${file.name}" melebihi 5 MB`);
   const ext = (f.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const path = `${folder || session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await sb.storage.from(bucket).upload(path, f, { contentType: f.type, upsert: false });
   if (error) throw error;
   return path;
@@ -238,24 +259,30 @@ export async function renderNav(active) {
   if (!host) return;
   let s = {};
   try { s = await loadSettings(); } catch {}
-  const p = await getProfile().catch(() => null);
+  const admin = await getProfile().catch(() => null);
+  const identity = getIdentity();
   const links = [
     ['index.html', 'Katalog', 'catalog'],
     ['sell.html', 'Jual Barang', 'sell'],
     ['orders.html', 'Pesanan Saya', 'orders']
   ];
-  if (p?.role === 'admin') links.push(['admin.html', 'Admin', 'admin']);
+  if (admin?.role === 'admin') links.push(['admin.html', 'Admin', 'admin']);
   host.className = 'topnav';
   host.innerHTML = `<div class="wrap topnav-inner">
       <a class="brand" href="index.html">${s.logo_url ? `<img src="${esc(s.logo_url)}" alt="">` : ''}<span>${esc(s.store_name || 'Compassion Market')}</span></a>
       <button class="nav-toggle" type="button" aria-expanded="false">☰ Menu</button>
       <nav>${links.map(([h, l, k]) => `<a href="${h}" class="${k === active ? 'active' : ''}">${l}</a>`).join('')}
-        ${p ? `<button class="linkish" type="button" data-logout title="${esc(p.email)}">Keluar (${esc((p.name || p.email).split(' ')[0])})</button>`
-            : `<a href="login.html" class="${active === 'login' ? 'active' : ''}">Masuk / Daftar</a>`}
+        ${identity ? `<button class="linkish" type="button" data-switch-identity title="${esc(identity.email || '')}">${esc(identity.name.split(' ')[0])} ▾</button>`
+            : `<a href="login.html?next=${encodeURIComponent(location.pathname.split('/').pop() + location.search + location.hash)}" class="${active === 'login' ? 'active' : ''}">Pilih identitas</a>`}
+        ${admin ? `<button class="linkish" type="button" data-logout-admin>Keluar admin</button>` : ''}
         <button class="cart-btn" type="button" data-open-cart aria-label="Buka keranjang">🛒 <span class="count">${cart.count()}</span></button>
       </nav></div>`;
   $('.nav-toggle', host).onclick = (e) => { host.classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', host.classList.contains('open')); };
-  $('[data-logout]', host)?.addEventListener('click', logout);
+  $('[data-switch-identity]', host)?.addEventListener('click', () => {
+    clearIdentity();
+    location.href = 'login.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search + location.hash);
+  });
+  $('[data-logout-admin]', host)?.addEventListener('click', logoutAdmin);
   $('[data-open-cart]', host).onclick = () => {
     if (active === 'catalog') document.dispatchEvent(new CustomEvent('cart:open'));
     else location.href = 'index.html#cart';

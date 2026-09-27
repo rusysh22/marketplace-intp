@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Masuk — Compassion Market</title>
+  <title>Pilih identitas — Compassion Market</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400..800;1,400..800&display=swap">
@@ -14,31 +14,31 @@
 <body>
   <header id="topnav" class="topnav"></header>
   <main class="wrap" style="max-width:520px;padding:28px 0 60px">
-    <div class="page-head"><span class="kicker">Akun karyawan</span><h1>Masuk atau daftar</h1>
-      <p>Gunakan akun untuk menjual barang, checkout, dan memantau pesanan.</p></div>
-    <div class="tabs" role="tablist">
-      <button type="button" class="active" data-tab="login">Masuk</button>
-      <button type="button" data-tab="register">Daftar akun baru</button>
+    <div id="pane-identity">
+      <div class="page-head"><span class="kicker">Karyawan</span><h1>Anda siapa?</h1>
+        <p>Pilih nama Anda untuk menjual barang, checkout, dan memantau pesanan. Tidak perlu password —
+          barang tetap diverifikasi admin sebelum tayang.</p></div>
+      <div class="panel">
+        <label class="field"><span>Cari nama / email</span><input type="search" id="q" placeholder="Ketik nama Anda…" autocomplete="off"></label>
+        <div id="emp-list" style="display:grid;gap:6px;max-height:340px;overflow:auto;margin-top:4px"></div>
+        <p class="small muted" id="emp-empty" hidden>Tidak ditemukan. Belum terdaftar? Hubungi admin untuk didaftarkan.</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" type="button" id="show-admin" style="margin-top:14px">Saya admin, masuk dengan password</button>
     </div>
-    <form class="panel" id="form-login" autocomplete="on">
-      <div style="display:grid;gap:12px">
-        <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="email"></label>
-        <label class="field"><span>Password</span><input type="password" name="password" required autocomplete="current-password"></label>
-        <button class="btn btn-primary btn-block" type="submit">Masuk</button>
-        <button class="btn btn-ghost btn-sm" type="button" id="forgot">Lupa password?</button>
-      </div>
-    </form>
-    <form class="panel hidden" id="form-register" autocomplete="on">
-      <div class="grid-form">
-        <label class="field span-all"><span class="req">Nama lengkap</span><input type="text" name="name" required autocomplete="name"></label>
-        <label class="field"><span>NIK / ID karyawan</span><input type="text" name="emp_id"></label>
-        <label class="field"><span>Departemen</span><input type="text" name="department"></label>
-        <label class="field span-all"><span class="req">No. WhatsApp</span><input type="tel" name="phone" required placeholder="08xxxxxxxxxx" autocomplete="tel"></label>
-        <label class="field span-all"><span class="req">Email kantor</span><input type="email" name="email" required autocomplete="email"><small id="domain-hint"></small></label>
-        <label class="field span-all"><span class="req">Password (min. 6 karakter)</span><input type="password" name="password" required minlength="6" autocomplete="new-password"></label>
-        <button class="btn btn-primary btn-block span-all" type="submit">Daftar</button>
-      </div>
-    </form>
+
+    <div id="pane-admin" class="hidden">
+      <div class="page-head"><span class="kicker">Admin marketplace</span><h1>Masuk admin</h1>
+        <p>Khusus admin. Akun dibuat lewat Supabase Dashboard, bukan di halaman ini.</p></div>
+      <form class="panel" id="form-admin" autocomplete="on">
+        <div style="display:grid;gap:12px">
+          <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="email"></label>
+          <label class="field"><span>Password</span><input type="password" name="password" required autocomplete="current-password"></label>
+          <button class="btn btn-primary btn-block" type="submit">Masuk</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="forgot">Lupa password?</button>
+        </div>
+      </form>
+      <button class="btn btn-ghost btn-sm" type="button" id="show-identity" style="margin-top:14px">← Kembali pilih identitas</button>
+    </div>
   </main>
   <script type="module" src="assets/js/login.js"></script>
 </body>

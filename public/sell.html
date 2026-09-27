@@ -58,17 +58,14 @@
         </div>
         <div class="btn-row" style="margin-top:14px"><button class="btn btn-primary" type="submit">Simpan profil</button></div>
       </form>
-      <form id="password-form" class="panel">
-        <h3>Ganti password</h3>
-        <div class="grid-form"><label class="field"><span>Password baru</span><input type="password" name="password" minlength="6" required autocomplete="new-password"></label></div>
-        <div class="btn-row" style="margin-top:12px"><button class="btn btn-ghost" type="submit">Ganti password</button></div>
-      </form>
     </section>
   </main>
   <template id="item-tpl">
     <fieldset class="panel item-card">
-      <legend class="item-title">Barang #<span class="n"></span></legend>
-      <button type="button" class="btn btn-ghost btn-sm remove-item">Hapus</button>
+      <div class="item-head">
+        <span class="item-title">Barang #<span class="n"></span></span>
+        <button type="button" class="btn btn-danger btn-sm remove-item" title="Hapus barang ini dari pengajuan">🗑️ Hapus barang</button>
+      </div>
       <div class="grid-form">
         <label class="field span-2"><span class="req">Nama barang</span><input type="text" name="name" required maxlength="120" placeholder="Mis. Nike Air Force 1 putih"></label>
         <label class="field"><span class="req">Jenis barang</span><select name="category_id" required></select></label>
@@ -80,6 +77,7 @@
         <label class="field"><span class="req">Harga jual (Rp)</span><input type="text" inputmode="numeric" name="price" required placeholder="150.000"></label>
         <label class="field"><span>Harga normal / beli (Rp)</span><input type="text" inputmode="numeric" name="original_price" placeholder="Opsional, ditampilkan dicoret"></label>
         <label class="field"><span class="req">Jumlah / stok</span><input type="number" name="stock" min="1" max="99" value="1" required></label>
+        <label class="field"><span>Nominal donasi (Rp)</span><input type="text" inputmode="numeric" name="donation_amount" placeholder="Opsional, mis. 50.000"><small>Bagian dari hasil penjualan yang didonasikan di acara ini</small></label>
         <label class="field span-all"><span class="req">Deskripsi singkat</span><textarea name="summary" required maxlength="400" placeholder="Merek, warna, kelengkapan, alasan dijual…"></textarea></label>
         <label class="field span-all"><span>Catatan kondisi / minus</span><textarea name="condition_note" maxlength="400" placeholder="Mis. ada goresan kecil di sisi kiri, dus tidak ada"></textarea></label>
         <div class="field span-all"><span class="req">Foto barang</span>

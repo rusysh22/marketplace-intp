@@ -4,16 +4,21 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- Profil karyawan (1:1 dengan auth.users)
+-- Profil karyawan & admin.
+-- Karyawan TIDAK punya akun auth.users: profil dibuat admin (menu Pengguna) dan
+-- dipilih sendiri lewat halaman "Masuk sebagai" tanpa password (self service
+-- pilih identitas, verifikasi barang tetap lewat admin sebelum tayang).
+-- Admin tetap wajib akun Supabase Auth asli (email + password) -> has_login = true.
 -- ---------------------------------------------------------------------------
 create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key default gen_random_uuid(),
   email text,
   name text not null default '',
   emp_id text,
   phone text,
   department text,
   role text not null default 'employee' check (role in ('employee', 'admin')),
+  has_login boolean not null default false,   -- true = akun asli Supabase Auth (wajib untuk admin)
   bank_name text,
   bank_account text,
   bank_holder text,
@@ -78,6 +83,7 @@ create table if not exists public.products (
   condition_pct int check (condition_pct between 0 and 100),
   original_price bigint check (original_price >= 0),  -- harga coret (opsional)
   price bigint not null default 0 check (price >= 0),
+  donation_amount bigint not null default 0 check (donation_amount >= 0),  -- nominal donasi acara
   stock int not null default 1 check (stock >= 0),
   summary text,
   condition_note text,

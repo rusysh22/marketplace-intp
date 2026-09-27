@@ -2,8 +2,8 @@
 // Self service penjual: daftarkan banyak barang, pantau status, penjualan, profil
 // ============================================================================
 import {
-  sb, $, $$, esc, rupiah, num, fmtDate, toast, errText, modal, confirmDialog, renderNav, requireLogin,
-  loadSettings, uploadFile, imgUrl, PLACEHOLDER, badge, PRODUCT_STATUS, ORDER_STATUS, getProfile
+  sb, $, $$, esc, rupiah, num, fmtDate, toast, errText, modal, confirmDialog, renderNav, requireIdentity,
+  loadSettings, uploadFile, imgUrl, PLACEHOLDER, badge, PRODUCT_STATUS, ORDER_STATUS
 } from './core.js';
 
 let profile, settings = {}, categories = [];
@@ -13,7 +13,7 @@ const MIN_COND = () => Number(settings.min_condition_pct || 0);
 
 (async () => {
   await renderNav('sell');
-  profile = await requireLogin();
+  profile = await requireIdentity();
   if (!profile) return;
   try {
     settings = await loadSettings();
@@ -64,7 +64,7 @@ function addItem() {
   const condLabel = (v) => v >= 95 ? 'Seperti baru' : v >= 80 ? 'Sangat baik, pemakaian ringan' : v >= 60 ? 'Baik, ada bekas pemakaian' : v >= 40 ? 'Cukup, ada minus terlihat' : 'Banyak minus / perlu perbaikan';
   const upd = () => { out.textContent = range.value + '%'; hint.textContent = condLabel(Number(range.value)); };
   range.oninput = upd; upd();
-  $$('[name=price],[name=original_price]', node).forEach((i) => i.addEventListener('input', () => {
+  $$('[name=price],[name=original_price],[name=donation_amount]', node).forEach((i) => i.addEventListener('input', () => {
     const v = num(i.value); i.value = v == null || Number.isNaN(v) ? '' : v.toLocaleString('id-ID');
   }));
   // foto
@@ -111,11 +111,13 @@ function collect() {
     const item = {
       name: g('name'), category_id: Number(g('category_id')) || null, size: g('size'), item_condition: g('item_condition'),
       condition_pct: Number(g('condition_pct')), price: num(g('price')), original_price: num(g('original_price')),
+      donation_amount: num(g('donation_amount')) || 0,
       stock: Number(g('stock')) || 1, summary: g('summary'), condition_note: g('condition_note')
     };
     const err = !item.name ? 'nama wajib diisi' : !item.category_id ? 'pilih jenis barang' : item.price == null || item.price < 0 ? 'isi harga jual'
       : !item.summary ? 'isi deskripsi singkat' : !c._files.length ? 'tambahkan minimal 1 foto'
-      : item.condition_pct < MIN_COND() ? `kondisi minimal ${MIN_COND()}%` : item.original_price != null && item.original_price < item.price ? 'harga normal harus ≥ harga jual' : null;
+      : item.condition_pct < MIN_COND() ? `kondisi minimal ${MIN_COND()}%` : item.original_price != null && item.original_price < item.price ? 'harga normal harus ≥ harga jual'
+      : item.donation_amount > item.price ? 'nominal donasi tidak boleh lebih dari harga jual' : null;
     return { item, files: c._files, err: err && `Barang #${i + 1}: ${err}`, card: c };
   });
 }
@@ -135,11 +137,11 @@ async function submit(e) {
       r.item.images = [];
       for (const f of r.files) {
         status.textContent = `Mengunggah foto ${++done}/${total}…`;
-        r.item.images.push(await uploadFile('product-photos', f));
+        r.item.images.push(await uploadFile('product-photos', f, { folder: profile.id }));
       }
     }
     status.textContent = 'Menyimpan…';
-    const { data, error } = await sb.rpc('submit_items', { p_items: rows.map((r) => r.item), p_note: $('[name=note]').value.trim() || null });
+    const { data, error } = await sb.rpc('submit_items', { p_actor: profile.id, p_items: rows.map((r) => r.item), p_note: $('[name=note]').value.trim() || null });
     if (error) throw error;
     modal({
       title: 'Pengajuan terkirim 🎉',
@@ -159,17 +161,16 @@ async function submit(e) {
 // ---------- barang saya ----------
 async function loadMine() {
   const box = $('#mine');
-  const { data, error } = await sb.from('products')
-    .select('*, categories(name), product_images(path, sort)').eq('seller_id', profile.id).order('created_at', { ascending: false });
+  const { data, error } = await sb.rpc('my_products', { p_actor: profile.id });
   if (error) { box.innerHTML = `<div class="empty">${esc(errText(error))}</div>`; return; }
   if (!data.length) { box.innerHTML = '<div class="empty"><strong>Belum ada barang</strong>Daftarkan barang pertama Anda di tab "Daftarkan barang".</div>'; return; }
   box.innerHTML = `<h2>Barang saya</h2><p class="small muted" style="margin:0 0 8px">${data.length} barang</p>` + data.map((p) => {
-    const img = (p.product_images || []).sort((a, b) => a.sort - b.sort)[0]?.path;
+    const img = (p.product_images || []).slice().sort((a, b) => a.sort - b.sort)[0]?.path;
     return `<div class="list-item" data-id="${p.id}">
       <img class="thumb" src="${esc(img ? imgUrl(img) : PLACEHOLDER)}" alt="">
       <div class="grow"><h4>${esc(p.name)}</h4>
-        <div class="meta">${esc(p.code || '')} · ${esc(p.categories?.name || '')} · ${rupiah(p.price)} · stok ${p.stock} · ${fmtDate(p.created_at, false)}</div>
-        <div style="margin-top:5px">${badge(PRODUCT_STATUS, p.status)} ${p.status === 'published' && p.stock === 0 ? '<span class="badge dark">Terjual</span>' : ''}</div>
+        <div class="meta">${esc(p.code || '')} · ${esc(p.category_name || '')} · ${rupiah(p.price)} · stok ${p.stock} · ${fmtDate(p.created_at, false)}</div>
+        <div style="margin-top:5px">${badge(PRODUCT_STATUS, p.status)} ${p.status === 'published' && p.stock === 0 ? '<span class="badge dark">Terjual</span>' : ''} ${p.donation_amount > 0 ? `<span class="badge ok">💝 Donasi ${rupiah(p.donation_amount)}</span>` : ''}</div>
         ${p.status === 'rejected' && p.reject_reason ? `<div class="notice danger small" style="margin-top:6px">Alasan ditolak: ${esc(p.reject_reason)}</div>` : ''}
       </div>
       <div class="btn-row">
@@ -182,7 +183,7 @@ async function loadMine() {
     $('[data-edit]', row)?.addEventListener('click', () => editItem(p));
     $('[data-withdraw]', row)?.addEventListener('click', async () => {
       if (!(await confirmDialog(`Tarik "${p.name}" dari marketplace?`, { danger: true }))) return;
-      const { error: e2 } = await sb.rpc('withdraw_my_item', { p_id: p.id });
+      const { error: e2 } = await sb.rpc('withdraw_my_item', { p_actor: profile.id, p_id: p.id });
       if (e2) return toast(errText(e2), 'error');
       toast('Barang ditarik', 'ok'); loadMine();
     });
@@ -200,6 +201,7 @@ function editItem(p) {
       <label class="field"><span>Harga jual</span><input type="number" name="price" min="0" value="${p.price}"></label>
       <label class="field"><span>Harga normal</span><input type="number" name="original_price" min="0" value="${p.original_price ?? ''}"></label>
       <label class="field"><span>Stok</span><input type="number" name="stock" min="1" value="${p.stock}"></label>
+      <label class="field"><span>Nominal donasi</span><input type="number" name="donation_amount" min="0" value="${p.donation_amount ?? 0}"></label>
       <label class="field span-all"><span>Deskripsi</span><textarea name="summary">${esc(p.summary || '')}</textarea></label>
       <label class="field span-all"><span>Catatan kondisi</span><textarea name="condition_note">${esc(p.condition_note || '')}</textarea></label>
       <label class="field span-all"><span>Ganti foto (opsional — mengganti semua foto lama)</span><input type="file" name="photos" accept="image/*" multiple></label>
@@ -207,14 +209,15 @@ function editItem(p) {
     actions: [{ label: 'Batal' }, { label: 'Simpan & ajukan ulang', cls: 'btn-primary', onClick: async ({ body }) => {
       const v = (n) => $(`[name=${n}]`, body).value;
       const patch = { name: v('name'), category_id: Number(v('category_id')), size: v('size'), condition_pct: Number(v('condition_pct')),
-        price: Number(v('price')), original_price: v('original_price'), stock: Number(v('stock')), summary: v('summary'), condition_note: v('condition_note') };
+        price: Number(v('price')), original_price: v('original_price'), donation_amount: Number(v('donation_amount')) || 0,
+        stock: Number(v('stock')), summary: v('summary'), condition_note: v('condition_note') };
       const files = $('[name=photos]', body).files;
       if (files.length) {
         if (files.length > MAX_PHOTOS()) throw new Error(`Maksimal ${MAX_PHOTOS()} foto`);
         patch.images = [];
-        for (const f of files) patch.images.push(await uploadFile('product-photos', f));
+        for (const f of files) patch.images.push(await uploadFile('product-photos', f, { folder: profile.id }));
       }
-      const { error } = await sb.rpc('update_my_item', { p_id: p.id, p_data: patch });
+      const { error } = await sb.rpc('update_my_item', { p_actor: profile.id, p_id: p.id, p_data: patch });
       if (error) throw error;
       toast('Perubahan disimpan, menunggu verifikasi ulang', 'ok');
       loadMine();
@@ -226,7 +229,7 @@ function editItem(p) {
 // ---------- penjualan ----------
 async function loadSales() {
   const box = $('#sales');
-  const { data, error } = await sb.from('my_sales').select('*').order('created_at', { ascending: false });
+  const { data, error } = await sb.rpc('my_sales', { p_actor: profile.id });
   if (error) { box.innerHTML = `<div class="empty">${esc(errText(error))}</div>`; return; }
   const paidStates = ['paid', 'ready_pickup', 'completed'];
   const earned = data.filter((r) => paidStates.includes(r.order_status)).reduce((a, r) => a + r.price * r.qty, 0);
@@ -253,16 +256,9 @@ function initProfile() {
     e.preventDefault();
     const patch = Object.fromEntries(['name', 'emp_id', 'department', 'phone', 'bank_name', 'bank_account', 'bank_holder'].map((k) => [k, f.elements[k].value.trim() || null]));
     if (!patch.name) return toast('Nama wajib diisi', 'error');
-    const { error } = await sb.from('profiles').update(patch).eq('id', profile.id);
+    const { data, error } = await sb.rpc('update_my_profile', { p_actor: profile.id, p_data: patch });
     if (error) return toast(errText(error), 'error');
-    profile = await getProfile(true);
+    profile = data;
     toast('Profil disimpan', 'ok');
-  };
-  $('#password-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const { error } = await sb.auth.updateUser({ password: e.target.elements.password.value });
-    if (error) return toast(errText(error), 'error');
-    e.target.reset();
-    toast('Password diganti', 'ok');
   };
 }

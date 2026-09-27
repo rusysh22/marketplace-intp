@@ -1,6 +1,6 @@
 // Pesanan pembeli: instruksi pembayaran, unggah bukti, batal, riwayat
 import {
-  sb, $, $$, esc, rupiah, fmtDate, duration, toast, errText, renderNav, requireLogin, loadSettings,
+  sb, $, $$, esc, rupiah, fmtDate, duration, toast, errText, renderNav, requireIdentity, loadSettings,
   uploadFile, imgUrl, badge, ORDER_STATUS, copyText, confirmDialog, waLink
 } from './core.js';
 
@@ -9,7 +9,7 @@ const STEPS = [['waiting_payment', 'Bayar'], ['waiting_verification', 'Verifikas
 
 (async () => {
   await renderNav('orders');
-  profile = await requireLogin();
+  profile = await requireIdentity();
   if (!profile) return;
   try { settings = await loadSettings(); } catch {}
   await sb.rpc('expire_orders');
@@ -20,7 +20,7 @@ const STEPS = [['waiting_payment', 'Bayar'], ['waiting_verification', 'Verifikas
 
 async function loadList() {
   const box = $('#list');
-  const { data, error } = await sb.from('orders').select('*, order_items(name, qty, price)').eq('buyer_id', profile.id).order('created_at', { ascending: false });
+  const { data, error } = await sb.rpc('my_orders', { p_actor: profile.id });
   if (error) { box.innerHTML = `<div class="empty">${esc(errText(error))}</div>`; return; }
   if (!data.length) { box.innerHTML = '<div class="empty"><strong>Belum ada pesanan</strong><a href="index.html">Lihat katalog</a></div>'; return; }
   box.innerHTML = `<h2>Riwayat pesanan</h2>` + data.map((o) => `<div class="list-item">
@@ -35,7 +35,7 @@ async function loadList() {
 async function showDetail(id) {
   clearInterval(timer);
   const box = $('#detail');
-  const { data: o, error } = await sb.from('orders').select('*, order_items(*)').eq('id', id).maybeSingle();
+  const { data: o, error } = await sb.rpc('my_order_detail', { p_actor: profile.id, p_order_id: id });
   if (error || !o) { box.innerHTML = ''; if (error) toast(errText(error), 'error'); return; }
   history.replaceState(null, '', '?id=' + id);
   const pm = o.payment_snapshot || {};
@@ -91,8 +91,8 @@ async function showDetail(id) {
     if (!f) return toast('Pilih file bukti bayar dulu', 'error');
     e.target.disabled = true;
     try {
-      const path = await uploadFile('payment-proofs', f, { compress: f.type !== 'application/pdf' });
-      const { error: e2 } = await sb.rpc('submit_payment_proof', { p_order_id: o.id, p_path: path });
+      const path = await uploadFile('payment-proofs', f, { folder: profile.id, compress: f.type !== 'application/pdf' });
+      const { error: e2 } = await sb.rpc('submit_payment_proof', { p_actor: profile.id, p_order_id: o.id, p_path: path });
       if (e2) throw e2;
       toast('Bukti bayar terkirim. Admin akan memverifikasi.', 'ok');
       await loadList(); showDetail(o.id);
@@ -100,7 +100,7 @@ async function showDetail(id) {
   });
   $('#cancel')?.addEventListener('click', async () => {
     if (!(await confirmDialog('Batalkan pesanan ini? Barang akan kembali tersedia untuk pembeli lain.', { danger: true, ok: 'Batalkan' }))) return;
-    const { error: e2 } = await sb.rpc('cancel_my_order', { p_order_id: o.id });
+    const { error: e2 } = await sb.rpc('cancel_my_order', { p_actor: profile.id, p_order_id: o.id });
     if (e2) return toast(errText(e2), 'error');
     toast('Pesanan dibatalkan', 'ok');
     await loadList(); showDetail(o.id);

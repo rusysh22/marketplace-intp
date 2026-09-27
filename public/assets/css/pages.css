@@ -1,7 +1,8 @@
 /* Halaman jual barang, pesanan, admin */
-.item-card{position:relative;border:1px solid var(--line);margin:0 0 14px;padding-top:6px}
-.item-card legend{font-weight:900;color:var(--navy);padding:0 6px;font-size:14px}
-.item-card .remove-item{position:absolute;top:10px;right:12px}
+.item-card{border:1px solid var(--line);margin:0 0 14px;padding-top:2px}
+.item-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 2px 12px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.item-head .item-title{font-weight:900;color:var(--navy);font-size:14px}
+.item-card .remove-item{display:inline-flex;align-items:center;gap:6px;flex-shrink:0}
 .range-row{display:flex;align-items:center;gap:10px}
 .range-row input{flex:1;accent-color:var(--teal-strong)}
 .range-row output{min-width:44px;font-weight:900;color:var(--navy);text-align:right}

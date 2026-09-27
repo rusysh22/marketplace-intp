@@ -63,16 +63,15 @@ create policy order_items_read on public.order_items for select using (
 -- Fungsi internal tidak boleh dipanggil langsung dari API
 revoke execute on function public.release_order_stock(bigint, text) from public, anon, authenticated;
 revoke execute on function public.next_form_no() from public, anon, authenticated;
-revoke execute on function public.log_audit(text, text, bigint, jsonb) from public, anon, authenticated;
+revoke execute on function public.log_audit(text, text, bigint, jsonb, uuid) from public, anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
-revoke all on public.my_sales from anon;
-grant select on public.my_sales to authenticated;
+revoke execute on function public.current_actor() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- STORAGE (S3-compatible)
---   product-photos  : publik, penjual upload ke folder <user_id>/
---   payment-proofs  : privat, pembeli upload ke <user_id>/, dibaca pemilik & admin
---   site-assets     : publik, admin upload QRIS / logo / banner
+--   product-photos  : publik, siapa saja upload (folder = id profil, tidak diverifikasi)
+--   payment-proofs  : siapa saja upload & baca (folder = id profil, tidak diverifikasi)
+--   site-assets     : publik baca, hanya admin upload/ubah/hapus
 -- ---------------------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values
   ('product-photos', 'product-photos', true, 5242880, array['image/jpeg', 'image/png', 'image/webp']),
@@ -91,16 +90,17 @@ drop policy if exists "cm assets write" on storage.objects;
 drop policy if exists "cm assets update" on storage.objects;
 drop policy if exists "cm assets delete" on storage.objects;
 
+-- Karyawan tidak punya sesi Supabase Auth (auth.uid() null), jadi upload foto
+-- barang/bukti bayar tidak bisa lagi diverifikasi kepemilikan folder di level
+-- storage -- sengaja dilonggarkan (disetujui: risiko diterima, barang tetap
+-- diverifikasi admin sebelum tayang, bukti bayar sebelum pesanan lunas).
 create policy "cm photos read" on storage.objects for select using (bucket_id = 'product-photos');
-create policy "cm photos upload" on storage.objects for insert to authenticated
-  with check (bucket_id = 'product-photos' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
-create policy "cm photos delete" on storage.objects for delete to authenticated
-  using (bucket_id = 'product-photos' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
+create policy "cm photos upload" on storage.objects for insert to public with check (bucket_id = 'product-photos');
+create policy "cm photos delete" on storage.objects for delete to public
+  using (bucket_id = 'product-photos' and (public.is_admin() or auth.uid() is null));
 
-create policy "cm proofs read" on storage.objects for select to authenticated
-  using (bucket_id = 'payment-proofs' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
-create policy "cm proofs upload" on storage.objects for insert to authenticated
-  with check (bucket_id = 'payment-proofs' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "cm proofs read" on storage.objects for select to public using (bucket_id = 'payment-proofs');
+create policy "cm proofs upload" on storage.objects for insert to public with check (bucket_id = 'payment-proofs');
 
 create policy "cm assets read" on storage.objects for select using (bucket_id = 'site-assets');
 create policy "cm assets write" on storage.objects for insert to authenticated
