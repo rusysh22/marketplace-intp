@@ -137,6 +137,31 @@ export async function copyText(text, btn) {
   if (btn) { const o = btn.textContent; btn.textContent = 'Tersalin ✓'; setTimeout(() => (btn.textContent = o), 2000); }
 }
 
+// Unduh gambar (mis. QRIS) sebagai file, bukan sekadar membuka tab baru.
+// <a download> saja tidak cukup untuk URL lintas-origin (Supabase Storage) --
+// browser mengabaikan atributnya -- jadi diambil dulu sebagai blob.
+export async function downloadFromUrl(url, filename, btn) {
+  const original = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Mengunduh…'; }
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Gagal mengambil file (' + res.status + ')');
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch (e) {
+    toast('Gagal mengunduh: ' + errText(e), 'error');
+    window.open(url, '_blank', 'noopener');   // fallback: buka di tab baru agar tetap bisa disimpan manual
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = original; }
+  }
+}
+
 // ---------- pengaturan (tabel settings) ----------
 let settingsCache = null;
 export async function loadSettings(force = false) {

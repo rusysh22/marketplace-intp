@@ -4,7 +4,7 @@
 // ============================================================================
 import {
   sb, $, $$, esc, rupiah, num, fmtDate, toast, errText, modal, confirmDialog, promptDialog, renderNav, requireAdminSession,
-  loadSettings, uploadFile, imgUrl, PLACEHOLDER, badge, ORDER_STATUS, PRODUCT_STATUS, copyText, waLink
+  loadSettings, uploadFile, imgUrl, PLACEHOLDER, badge, ORDER_STATUS, PRODUCT_STATUS, copyText, waLink, downloadFromUrl
 } from './core.js';
 
 const ZONES = {
@@ -209,7 +209,9 @@ async function openOrder(o) {
   if (o.proof_path) { const { data } = await sb.storage.from('payment-proofs').createSignedUrl(o.proof_path, 900); proof = data?.signedUrl || ''; }
   const st = o.status;
   const actions = [{ label: 'Tutup' }];
-  const call = (fn, args, msg) => async () => { unwrap(await sb.rpc(fn, args)); toast(msg, 'ok'); refreshCounts(); orders(); };
+  // await pada render ulang penting: tanpa itu, navigasi cepat setelah aksi bisa
+  // membuat render lama menimpa halaman yang sudah berpindah (race condition).
+  const call = (fn, args, msg) => async () => { unwrap(await sb.rpc(fn, args)); toast(msg, 'ok'); await refreshCounts(); await orders(); };
   if (['waiting_verification', 'waiting_payment'].includes(st)) {
     actions.push({ label: 'Tolak bukti', cls: 'btn-ghost', onClick: async () => {
       const note = await promptDialog('Alasan (dilihat pembeli):', { title: 'Tolak bukti bayar', value: 'Nominal / bukti tidak sesuai, silakan unggah ulang' });
@@ -278,7 +280,7 @@ async function recordOfflineOrder() {
       });
       if (error) throw error;
       toast(`Pesanan ${data.code} dicatat lunas (${rupiah(data.total)})`, 'ok');
-      refreshCounts(); orders();
+      await refreshCounts(); await orders();
     } }]
   });
   const recalc = () => {
@@ -369,7 +371,7 @@ async function importExcel(file) {
     actions: [{ label: 'Batal' }, ...(total && !errors.length ? [{ label: `Terapkan ${total} perubahan`, cls: 'btn-primary', onClick: async () => {
       const res = unwrap(await sb.rpc('admin_import_products', { p_rows: [...updates.map((u) => u.payload), ...creates.map((c) => c.payload)], p_source: file.name }));
       toast(`Import selesai: ${res.updated} diubah, ${res.created} baru${res.stock_changes ? `, ${res.stock_changes} penyesuaian stok` : ''}`, 'ok');
-      products();
+      await products();
     } }] : [])]
   });
 }
@@ -421,7 +423,7 @@ async function editProduct(p) {
       unwrap(await sb.from('product_images').delete().eq('product_id', id));
       if (images.length) unwrap(await sb.from('product_images').insert(images.map((path, i) => ({ product_id: id, path, sort: i }))));
       toast('Barang disimpan', 'ok');
-      products();
+      await products();
     } }]
   });
   const draw = () => {
@@ -447,7 +449,7 @@ function adjustStock(p) {
       const note = $('[name=note]', body).value.trim();
       if (!note) throw new Error('Isi keterangan penyesuaian');
       unwrap(await sb.rpc('admin_adjust_stock', { p_id: p.id, p_new_stock: Number($('[name=stock]', body).value), p_note: note }));
-      toast('Stok diperbarui', 'ok'); products();
+      toast('Stok diperbarui', 'ok'); await products();
     } }]
   });
 }
@@ -485,8 +487,8 @@ async function flash() {
     const f = data.find((x) => x.id === Number(el.dataset.id));
     $('[data-edit]', el).onclick = () => editFlash(f);
     $('[data-add]', el).onclick = () => addFlashItems(f);
-    $('[data-del]', el).onclick = async () => { if (await confirmDialog(`Hapus flash sale "${f.name}"?`, { danger: true })) { unwrap(await sb.from('flash_sales').delete().eq('id', f.id)); flash(); } };
-    $$('[data-rm-item]', el).forEach((b) => (b.onclick = async () => { unwrap(await sb.from('flash_sale_items').delete().eq('id', Number(b.dataset.rmItem))); flash(); }));
+    $('[data-del]', el).onclick = async () => { if (await confirmDialog(`Hapus flash sale "${f.name}"?`, { danger: true })) { unwrap(await sb.from('flash_sales').delete().eq('id', f.id)); await flash(); } };
+    $$('[data-rm-item]', el).forEach((b) => (b.onclick = async () => { unwrap(await sb.from('flash_sale_items').delete().eq('id', Number(b.dataset.rmItem))); await flash(); }));
   });
 }
 function editFlash(f) {
@@ -506,7 +508,7 @@ function editFlash(f) {
       v.start_at = new Date(v.start_at).toISOString(); v.end_at = new Date(v.end_at).toISOString();
       if (v.end_at <= v.start_at) throw new Error('Waktu selesai harus setelah mulai');
       if (f) unwrap(await sb.from('flash_sales').update(v).eq('id', f.id)); else unwrap(await sb.from('flash_sales').insert(v));
-      toast('Flash sale disimpan', 'ok'); flash();
+      toast('Flash sale disimpan', 'ok'); await flash();
     } }]
   });
 }
@@ -530,7 +532,7 @@ async function addFlashItems(f) {
       if (!rows.length) throw new Error('Pilih minimal 1 barang');
       if (rows.some((r) => !(r.flash_price >= 0))) throw new Error('Isi harga flash');
       unwrap(await sb.from('flash_sale_items').insert(rows));
-      toast(`${rows.length} barang ditambahkan`, 'ok'); flash();
+      toast(`${rows.length} barang ditambahkan`, 'ok'); await flash();
     } }]
   });
   const applyPct = () => { const pct = Number($('[data-pct]', m.body).value) || 0; $$('[data-price]', m.body).forEach((i) => { i.value = Math.round((Number(i.dataset.price) * (100 - pct)) / 100 / 500) * 500; }); };
@@ -568,7 +570,7 @@ async function payout() {
       const ref = await promptDialog('No. referensi transfer / catatan:', { title: 'Konfirmasi pencairan', multiline: false });
       if (!ref) return;
       const n = unwrap(await sb.rpc('admin_mark_payout', { p_item_ids: ids, p_ref: ref }));
-      toast(`${n} item ditandai dicairkan`, 'ok'); payout();
+      toast(`${n} item ditandai dicairkan`, 'ok'); await payout();
     };
   });
 }
@@ -593,7 +595,7 @@ async function categoriesSec() {
       if (!(await confirmDialog(`Hapus jenis "${c.name}"? Jika sudah dipakai barang, nonaktifkan saja.`, { danger: true }))) return;
       const { error } = await sb.from('categories').delete().eq('id', c.id);
       if (error) return toast('Tidak bisa dihapus karena sudah dipakai barang. Nonaktifkan saja.', 'error');
-      categoriesSec();
+      await categoriesSec();
     };
   });
 }
@@ -612,7 +614,7 @@ function editCategory(c) {
     actions: [{ label: 'Batal' }, { label: 'Simpan', cls: 'btn-primary', onClick: async ({ body }) => {
       const v = readForm(body, defs); v.sort = v.sort ?? 0; v.size_options = v.size_options || '';
       if (c) unwrap(await sb.from('categories').update(v).eq('id', c.id)); else unwrap(await sb.from('categories').insert(v));
-      toast('Tersimpan', 'ok'); categoriesSec();
+      toast('Tersimpan', 'ok'); await categoriesSec();
     } }]
   });
 }
@@ -625,18 +627,19 @@ async function payments() {
   main().innerHTML = head('Metode pembayaran', 'QRIS & rekening bank yang tampil di katalog dan checkout.', '<button class="btn btn-primary btn-sm" data-new>+ Metode baru</button>') + `
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Urut</th><th>Tipe</th><th>Nama</th><th>Detail</th><th>Aktif</th><th></th></tr></thead><tbody>
     ${data.map((m) => `<tr data-id="${m.id}"><td>${m.sort}</td><td>${m.type === 'qris' ? '<span class="badge info">QRIS</span>' : '<span class="badge">Bank</span>'}</td><td>${esc(m.name)}</td>
-      <td class="small">${m.type === 'qris' ? (m.qris_image ? `<img src="${esc(imgUrl(m.qris_image, 'site-assets'))}" style="height:60px" alt="QR">` : '<span class="badge warn">Gambar QR belum diunggah</span>') : `${esc(m.bank_name || '')} ${esc(m.account_no || '')} a.n. ${esc(m.account_holder || '')}`}</td>
+      <td class="small">${m.type === 'qris' ? (m.qris_image ? `<img src="${esc(imgUrl(m.qris_image, 'site-assets'))}" style="height:60px;display:block;margin-bottom:4px" alt="QR"><button class="btn btn-ghost btn-sm" type="button" data-dl-qris>⬇ Unduh</button>` : '<span class="badge warn">Gambar QR belum diunggah</span>') : `${esc(m.bank_name || '')} ${esc(m.account_no || '')} a.n. ${esc(m.account_holder || '')}`}</td>
       <td>${m.active ? '<span class="badge ok">Aktif</span>' : '<span class="badge">Nonaktif</span>'}</td><td class="nowrap"><button class="btn btn-ghost btn-sm" data-edit>Edit</button> <button class="btn btn-ghost btn-sm" data-del>Hapus</button></td></tr>`).join('')}
     </tbody></table></div>`;
   $('[data-new]').onclick = () => editPayment(null);
   $$('tr[data-id]').forEach((tr) => {
     const m = data.find((x) => x.id === Number(tr.dataset.id));
+    $('[data-dl-qris]', tr)?.addEventListener('click', (e) => downloadFromUrl(imgUrl(m.qris_image, 'site-assets'), `QRIS-${(m.name || 'compassion-market').replace(/[^\w-]+/g, '-')}.jpg`, e.target));
     $('[data-edit]', tr).onclick = () => editPayment(m);
     $('[data-del]', tr).onclick = async () => {
       if (!(await confirmDialog(`Hapus "${m.name}"?`, { danger: true }))) return;
       const { error } = await sb.from('payment_methods').delete().eq('id', m.id);
       if (error) return toast('Sudah dipakai pesanan — nonaktifkan saja.', 'error');
-      payments();
+      await payments();
     };
   });
 }
@@ -662,7 +665,7 @@ function editPayment(m) {
       if (f) v.qris_image = await uploadFile('site-assets', f, { folder: 'qris', compress: false });
       if (v.type === 'qris' && !v.qris_image && !m?.qris_image && v.active) throw new Error('Unggah gambar QRIS sebelum mengaktifkan');
       if (m) unwrap(await sb.from('payment_methods').update(v).eq('id', m.id)); else unwrap(await sb.from('payment_methods').insert(v));
-      toast('Tersimpan', 'ok'); payments();
+      toast('Tersimpan', 'ok'); await payments();
     } }]
   });
 }
@@ -745,15 +748,15 @@ async function users() {
         if (!v('name')) { toast('Nama wajib diisi', 'error'); return false; }
         const { error } = await sb.rpc('admin_create_employee', { p_name: v('name'), p_email: v('email') || null, p_emp_id: v('emp_id') || null, p_department: v('department') || null, p_phone: v('phone') || null });
         if (error) throw error;
-        toast('Karyawan ditambahkan', 'ok'); users();
+        toast('Karyawan ditambahkan', 'ok'); await users();
       } }]
     });
   };
   $('[data-q]').oninput = (e) => $$('tr[data-s]').forEach((tr) => (tr.hidden = !tr.dataset.s.includes(e.target.value.toLowerCase())));
   $$('tr[data-id]').forEach((tr) => {
     const u = data.find((x) => x.id === tr.dataset.id);
-    $('[data-role]', tr)?.addEventListener('click', async () => { unwrap(await sb.from('profiles').update({ role: u.role === 'admin' ? 'employee' : 'admin' }).eq('id', u.id)); users(); });
-    $('[data-active]', tr)?.addEventListener('click', async () => { unwrap(await sb.from('profiles').update({ active: !u.active }).eq('id', u.id)); users(); });
+    $('[data-role]', tr)?.addEventListener('click', async () => { unwrap(await sb.from('profiles').update({ role: u.role === 'admin' ? 'employee' : 'admin' }).eq('id', u.id)); await users(); });
+    $('[data-active]', tr)?.addEventListener('click', async () => { unwrap(await sb.from('profiles').update({ active: !u.active }).eq('id', u.id)); await users(); });
   });
 }
 

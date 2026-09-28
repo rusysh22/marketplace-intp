@@ -187,6 +187,19 @@ try {
   await shot(admin, '05-admin-flash-sale');
   step('flash sale dibuat dan headset dimasukkan (diskon 20%)');
 
+  // ---------- aktifkan QRIS (unggah gambar) & admin bisa mengunduhnya kembali ----------
+  await admin.goto(BASE + '/admin.html#payments');
+  await admin.locator('tr', { hasText: 'QRIS' }).locator('[data-edit]').click();
+  const qm = admin.locator('.modal', { hasText: 'Edit metode pembayaran' });
+  await qm.locator('[name=qris_file]').setInputFiles({ name: 'qris.png', mimeType: 'image/png', buffer: png });
+  await qm.locator('[name=active]').check();
+  await qm.locator('button', { hasText: 'Simpan' }).click();
+  await expectToast(admin, /Tersimpan/);
+  await admin.waitForSelector('[data-dl-qris]');
+  const [adminDl] = await Promise.all([admin.waitForEvent('download'), admin.click('[data-dl-qris]')]);
+  if (!/^QRIS-.*\.jpg$/.test(adminDl.suggestedFilename())) throw new Error('Nama file unduhan QRIS admin tidak sesuai: ' + adminDl.suggestedFilename());
+  step('admin mengaktifkan QRIS (unggah gambar) & mengunduhnya kembali dari daftar metode pembayaran');
+
   // ---------- pembeli ----------
   const buyer = await newPage('buyer');
   await pickIdentity(buyer, 'budi.pembeli.e2e@interport.co.id');
@@ -207,7 +220,7 @@ try {
   step('klik "+ Keranjang" langsung membuka keranjang (barang baru ditandai, "Lanjut belanja" menutup)');
   await buyer.click('.drawer [data-checkout]');
   await buyer.locator('.modal', { hasText: 'Checkout' }).waitFor();
-  await buyer.locator('.pay-option', { hasText: 'BCA' }).click();
+  await buyer.locator('.pay-option', { hasText: 'QRIS' }).click();
   await shot(buyer, '08-checkout');
   await buyer.locator('.modal button', { hasText: 'Buat pesanan' }).click();
   await buyer.waitForURL(/orders\.html\?id=/);
@@ -215,10 +228,17 @@ try {
   await shot(buyer, '09-instruksi-bayar');
   const total = await buyer.locator('.pay-box .amount').innerText();
   if (!/1\.120\.\d{3}/.test(total.replace(/\s/g, ''))) console.warn('  (cek total: ' + total + ')');
+  // fitur unduh QRIS di halaman pesanan
+  await buyer.waitForSelector('#dl-qris');
+  const [buyerDl] = await Promise.all([buyer.waitForEvent('download'), buyer.click('#dl-qris')]);
+  if (!/^QRIS-ORD-.*\.jpg$/.test(buyerDl.suggestedFilename())) throw new Error('Nama file unduhan QRIS pembeli tidak sesuai: ' + buyerDl.suggestedFilename());
+  const savedPath = await buyerDl.path();
+  if (!savedPath || !fs.statSync(savedPath).size) throw new Error('File QRIS yang diunduh kosong');
+  step('pembeli mengunduh gambar QRIS dari halaman pesanan');
   await buyer.setInputFiles('#proof', { name: 'bukti.png', mimeType: 'image/png', buffer: png });
   await buyer.click('#send-proof');
   await expectToast(buyer, /Bukti bayar terkirim/);
-  step('pembeli checkout (flash price + kode unik) & upload bukti bayar');
+  step('pembeli checkout dengan QRIS (flash price + kode unik) & upload bukti bayar');
 
   // stok berkurang di katalog
   await guest.reload();
