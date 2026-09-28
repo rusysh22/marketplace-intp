@@ -222,18 +222,36 @@ select cron.schedule('cm-expire-orders', '*/10 * * * *', 'select public.expire_o
 Karena situs ini statis (tidak ada server-side rendering), WhatsApp/Telegram/dll tidak bisa membaca meta
 Open Graph dari halaman katalog secara langsung. Fungsinya dibantu Edge Function `share` yang menyajikan
 halaman HTML berisi meta `og:*` (foto, judul, harga, nama toko), lalu meneruskan pengguna sungguhan ke
-halaman katalog aslinya.
+halaman katalog aslinya. Tautan yang dibagikan tetap memakai **domain situs Anda sendiri** (bukan
+`*.supabase.co`) lewat rewrite/proxy di hosting — supaya rapi dan konsisten dengan brand.
 
-1. Deploy fungsinya (butuh [Supabase CLI](https://supabase.com/docs/guides/cli)):
+1. Deploy fungsinya (butuh [Supabase CLI](https://supabase.com/docs/guides/cli), login dengan akun yang
+   punya akses ke project — minimal role **Developer** di organisasi Supabase-nya):
    ```sh
+   supabase login
+   supabase link --project-ref <PROJECT_REF>
    supabase functions deploy share --no-verify-jwt
    ```
-   `--no-verify-jwt` wajib — crawler chat app memanggil URL ini tanpa login.
-2. Di menu **Admin → Pengaturan → Kartu bagikan (share card)**: isi **URL situs katalog** (alamat tempat
-   folder `public/` di-hosting, mis. `https://market.contoh.com`) dan centang untuk mengaktifkan.
-3. Setelah aktif, tombol "Bagikan" akan membagikan tautan
-   `<SUPABASE_URL>/functions/v1/share?p=<kode-barang>` alih-alih tautan katalog langsung. Kalau belum
-   diisi/diaktifkan, fitur bagikan tetap bekerja seperti biasa (tautan katalog biasa, tanpa kartu pratinjau).
+   `--no-verify-jwt` wajib — crawler chat app memanggil URL ini tanpa login. `<PROJECT_REF>` dilihat dari
+   URL dashboard project Anda.
+2. Proxy path `/share` di hosting situs Anda ke Edge Function itu, supaya tautan yang dibagikan berupa
+   `https://domain-anda.com/share?p=<kode>` (bukan URL mentah Supabase):
+   - **Vercel** — sudah disiapkan file [`vercel.json`](./vercel.json) di root repo; isi `<PROJECT_REF>` di
+     dalamnya dengan project ref Anda sebelum deploy. Kalau *Root Directory* project Vercel Anda diset ke
+     `public/` (bukan root repo), pindahkan `vercel.json` ke dalam folder `public/`.
+   - **Netlify** — tambahkan di `public/_redirects`:
+     `/share  https://<PROJECT_REF>.supabase.co/functions/v1/share  200`
+   - **Nginx** — tambahkan di server block:
+     ```nginx
+     location = /share {
+       proxy_pass https://<PROJECT_REF>.supabase.co/functions/v1/share$is_args$args;
+     }
+     ```
+3. Di menu **Admin → Pengaturan → Kartu bagikan (share card)**: isi **URL situs katalog** (domain situs
+   Anda sendiri, mis. `https://market.contoh.com`, tanpa `/` di akhir) dan centang untuk mengaktifkan.
+4. Setelah aktif, tombol "Bagikan" akan membagikan tautan `https://market.contoh.com/share?p=<kode-barang>`
+   alih-alih tautan katalog langsung. Kalau belum diisi/diaktifkan, fitur bagikan tetap bekerja seperti
+   biasa (tautan katalog biasa, tanpa kartu pratinjau).
 
 ---
 

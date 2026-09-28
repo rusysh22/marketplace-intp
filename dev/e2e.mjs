@@ -162,12 +162,14 @@ try {
     await firstCard.locator('.share-btn').click();
     await expectToast(guest, /Tautan barang disalin/);
     let clip = await guest.evaluate(() => navigator.clipboard.readText());
-    if (clip.includes('/functions/v1/share')) throw new Error('Kartu bagikan belum diaktifkan admin tapi tautan sudah memakai Edge Function: ' + clip);
+    if (clip.includes('/share?p=')) throw new Error('Kartu bagikan belum diaktifkan admin tapi tautan sudah memakai Edge Function: ' + clip);
 
     await db.query("update settings set value = '1' where key = 'enable_share_card'");
     await db.query("update settings set value = $1 where key = 'site_url'", [BASE]);
 
-    const r = await fetch(`${BASE}/functions/v1/share?p=${shareCode}`);
+    // "/share" (bukan "/functions/v1/share") -- meniru rewrite hosting (Vercel/dst) yang meneruskan
+    // domain situs sendiri ke Edge Function, supaya tautan yang dibagikan tetap pakai domain sendiri.
+    const r = await fetch(`${BASE}/share?p=${shareCode}`);
     const html = await r.text();
     if (!r.ok) throw new Error(`Edge Function share mengembalikan status ${r.status}`);
     if (!html.includes('property="og:title"') || !html.includes('property="og:image"') || !html.includes('property="og:site_name" content="Compassion Market"'))
@@ -175,7 +177,7 @@ try {
     if (!html.includes('product:price:amount')) throw new Error('Halaman kartu bagikan tidak memuat harga barang');
     if (!html.includes(`?p=${shareCode}`)) throw new Error('Halaman kartu bagikan tidak mengalihkan ke barang yang benar');
 
-    const notFound = await fetch(`${BASE}/functions/v1/share?p=KODE-TIDAK-ADA-999`);
+    const notFound = await fetch(`${BASE}/share?p=KODE-TIDAK-ADA-999`);
     if (notFound.status !== 404) throw new Error('Kode barang tak dikenal seharusnya mengembalikan status 404, dapat ' + notFound.status);
 
     await guest.reload();
@@ -183,7 +185,7 @@ try {
     await guest.locator('.card').first().locator('.share-btn').click();
     await expectToast(guest, /Tautan barang disalin/);
     clip = await guest.evaluate(() => navigator.clipboard.readText());
-    if (!clip.includes('/functions/v1/share?p=')) throw new Error('Setelah diaktifkan admin, tautan bagikan seharusnya memakai Edge Function share: ' + clip);
+    if (!clip.startsWith(`${BASE}/share?p=`)) throw new Error('Setelah diaktifkan admin, tautan bagikan seharusnya pakai domain sendiri (/share?p=…): ' + clip);
 
     await db.query("update settings set value = '0' where key = 'enable_share_card'");
     await db.query("update settings set value = '' where key = 'site_url'");

@@ -3,7 +3,7 @@
 // ============================================================================
 import {
   sb, $, $$, esc, rupiah, duration, waLink, imgUrl, PLACEHOLDER, toast, modal, errText,
-  loadSettings, flag, getIdentity, getProfile, cart, renderNav, configured, copyText, SUPABASE_URL
+  loadSettings, flag, getIdentity, getProfile, cart, renderNav, configured, copyText
 } from './core.js';
 
 const state = {
@@ -280,11 +280,12 @@ function productUrl(p) {
 }
 
 // Kalau kartu bagikan diaktifkan admin (foto/harga muncul saat dibagikan ke chat), pakai tautan
-// Edge Function "share" yang menyajikan meta Open Graph, lalu meneruskan ke halaman katalog asli.
-// Kalau belum diaktifkan/dikonfigurasi, pakai tautan katalog biasa seperti sebelumnya.
+// "/share" di domain situs sendiri -- bukan domain *.supabase.co -- yang diteruskan (proxy/rewrite)
+// ke Edge Function "share" oleh hosting (lihat panduan proxy di README). Kalau belum
+// diaktifkan/dikonfigurasi, pakai tautan katalog biasa seperti sebelumnya.
 function shareUrl(p) {
-  if (flag(state.settings, 'enable_share_card') && state.settings.site_url && SUPABASE_URL) {
-    return `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/share?p=${encodeURIComponent(p.code || p.id)}`;
+  if (flag(state.settings, 'enable_share_card') && state.settings.site_url) {
+    return `${state.settings.site_url.replace(/\/$/, '')}/share?p=${encodeURIComponent(p.code || p.id)}`;
   }
   return productUrl(p);
 }

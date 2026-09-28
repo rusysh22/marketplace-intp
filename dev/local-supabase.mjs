@@ -282,7 +282,9 @@ http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/rest/v1')) return proxyRest(req, res, url);
     if (url.pathname.startsWith('/auth/v1')) return await handleAuth(req, res, url);
     if (url.pathname.startsWith('/storage/v1')) return await handleStorage(req, res, url);
-    if (url.pathname === '/functions/v1/share') return await handleShareFunction(req, res, url);
+    // /functions/v1/share = URL Supabase asli; /share = tiruan rewrite hosting (Vercel/Netlify/Nginx)
+    // yang meneruskan domain situs sendiri ke Edge Function itu (lihat panduan proxy di README).
+    if (url.pathname === '/functions/v1/share' || url.pathname === '/share') return await handleShareFunction(req, res, url);
     return serveStatic(req, res, url);
   } catch (e) {
     console.error(e);
