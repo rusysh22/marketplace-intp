@@ -260,7 +260,12 @@ body:not(.fx) .celebration{display:none}
 .sold-toggle input{width:16px;height:16px;accent-color:var(--teal-strong)}
 .detail-btn{flex:1;min-width:0;border:1px solid #dee1dc;border-radius:8px;background:#fff;padding:10px 6px;color:var(--navy);font:inherit;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}
 .detail-btn:hover{background:#f6f8f4}
-@media(max-width:730px){.detail-btn{width:100%;margin-bottom:6px;min-height:32px;padding:8px 3px;font-size:10px}.payment{padding:10px 12px}}
+.share-btn{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:5px;width:38px;border:1px solid #dee1dc;border-radius:8px;background:#fff;color:var(--navy);font-size:14px;line-height:1;cursor:pointer}
+.share-btn:hover{background:#f6f8f4}
+.share-btn-label{display:none}
+@media(max-width:730px){.detail-btn{width:100%;margin-bottom:6px;min-height:32px;padding:8px 3px;font-size:10px}.payment{padding:10px 12px}
+  .share-btn{width:100%;margin-bottom:6px;min-height:32px;padding:8px 3px;font-size:12px}
+  .share-btn-label{display:inline;font-size:10px;font-weight:800}}
 
 /* ---------- toko 3D: logo CSS3D & bubble percakapan ---------- */
 .store3d-card .s3d-css{position:absolute;inset:0;pointer-events:none;z-index:1}

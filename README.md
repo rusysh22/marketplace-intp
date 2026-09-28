@@ -72,6 +72,9 @@ Padanan istilah ERP (D365 / Odoo) supaya mudah dipetakan:
   untuk melihatnya (tampil dengan label *OUT OF STOCK*). Jumlah per jenis barang di filter ikut menyesuaikan.
 - Filter jenis barang (dengan jumlah), pencarian (nama/kode/penjual), urutan (rekomendasi, harga, nama, terbaru).
 - Detail barang (galeri foto, catatan kondisi, tanya via WhatsApp) terbuka dari foto atau tombol "Detail barang".
+- **Bagikan link barang** (tombol 🔗 di kartu maupun di detail): di HP dengan dukungan Web Share, membuka menu
+  bagikan bawaan (WhatsApp, dll.); kalau tidak, tautan disalin ke clipboard. Tautannya (`index.html?p=<kode>`)
+  otomatis membuka detail barang itu saat dibuka siapa pun — cocok ditempel di grup WhatsApp/chat.
 - Ringkasan metode pembayaran (logo QRIS/bank). Nomor rekening/QR & nominal pasti sengaja baru tampil setelah
   checkout, supaya setiap transfer terhubung ke satu pesanan (kode unik). Di halaman Pesanan Saya, gambar QRIS
   bisa diunduh (tombol "⬇ Unduh QRIS") untuk dipindai dari perangkat/aplikasi lain — admin juga bisa mengunduh
