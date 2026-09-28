@@ -73,7 +73,9 @@ Padanan istilah ERP (D365 / Odoo) supaya mudah dipetakan:
 - Filter jenis barang (dengan jumlah), pencarian (nama/kode/penjual), urutan (rekomendasi, harga, nama, terbaru).
 - Detail barang (galeri foto, catatan kondisi, tanya via WhatsApp) terbuka dari foto atau tombol "Detail barang".
 - Ringkasan metode pembayaran (logo QRIS/bank). Nomor rekening/QR & nominal pasti sengaja baru tampil setelah
-  checkout, supaya setiap transfer terhubung ke satu pesanan (kode unik).
+  checkout, supaya setiap transfer terhubung ke satu pesanan (kode unik). Di halaman Pesanan Saya, gambar QRIS
+  bisa diunduh (tombol "⬇ Unduh QRIS") untuk dipindai dari perangkat/aplikasi lain — admin juga bisa mengunduh
+  ulang gambar QRIS yang sudah diunggah dari Admin → Metode pembayaran.
 - Cetak label harga A4 (8 label/halaman) — tombol hanya muncul untuk admin yang sedang login, mencetak barang
   yang sedang tampil (bisa disaring dulu lewat filter/pencarian).
 - **Toko 3D**: ruangan isometrik (green wall + logo Interport, bar counter & stool, rak baju, meja tengah, rak

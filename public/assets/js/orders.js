@@ -1,7 +1,7 @@
 // Pesanan pembeli: instruksi pembayaran, unggah bukti, batal, riwayat
 import {
   sb, $, $$, esc, rupiah, fmtDate, duration, toast, errText, renderNav, requireIdentity, loadSettings,
-  uploadFile, imgUrl, badge, ORDER_STATUS, copyText, confirmDialog, waLink
+  uploadFile, imgUrl, badge, ORDER_STATUS, copyText, confirmDialog, waLink, downloadFromUrl
 } from './core.js';
 
 let profile, settings = {}, timer;
@@ -61,7 +61,9 @@ async function showDetail(id) {
         <div class="amount">${rupiah(o.total)} <button class="copy-btn" type="button" data-copy="${o.total}">Salin nominal</button>
           <small>${o.unique_code ? 'Transfer TEPAT sampai 3 digit terakhir agar mudah diverifikasi' : 'Bayar sesuai total'}</small></div>
         ${o.status === 'waiting_payment' ? `<div style="margin-top:8px">Batas bayar: <span class="countdown-pill" id="deadline">…</span></div>` : ''}
-        ${pm.type === 'qris' ? (pm.qris_image ? `<img class="qris" src="${esc(imgUrl(pm.qris_image, 'site-assets'))}" alt="QRIS">` : '<div class="acct">QR belum diunggah admin. Hubungi admin.</div>')
+        ${pm.type === 'qris' ? (pm.qris_image ? `<img class="qris" src="${esc(imgUrl(pm.qris_image, 'site-assets'))}" alt="QRIS">
+             <div style="text-align:center"><button class="btn btn-ghost btn-sm" type="button" id="dl-qris" style="margin-top:8px">⬇ Unduh QRIS</button></div>`
+            : '<div class="acct">QR belum diunggah admin. Hubungi admin.</div>')
           : `<div class="acct"><div class="small muted">${esc(pm.bank_name || '')} a.n. ${esc(pm.account_holder || '')}</div><strong>${esc(pm.account_no || '')}</strong> <button class="copy-btn" type="button" data-copy="${esc(pm.account_no || '')}">Salin</button></div>`}
         ${pm.instructions ? `<p class="small" style="color:#d5e4ea;margin:10px 0 0">${esc(pm.instructions)}</p>` : ''}
       </div>
@@ -77,6 +79,7 @@ async function showDetail(id) {
       ${wa ? `<a class="btn btn-ghost" target="_blank" rel="noopener noreferrer" href="${waLink(wa, `Halo admin, saya ${profile.name} ingin konfirmasi pesanan ${o.code} senilai ${rupiah(o.total)}.`)}">Hubungi admin (WhatsApp)</a>` : ''}
     </div></div>`;
   $$('[data-copy]', box).forEach((b) => (b.onclick = () => copyText(b.dataset.copy, b)));
+  $('#dl-qris')?.addEventListener('click', (e) => downloadFromUrl(imgUrl(pm.qris_image, 'site-assets'), `QRIS-${o.code}.jpg`, e.target));
   if (o.status === 'waiting_payment') {
     const el = $('#deadline');
     const tick = () => {
