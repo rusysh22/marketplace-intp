@@ -17,6 +17,7 @@ const errors = [];
 const openPages = [];
 async function newPage(name, { with3d = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   const page = await ctx.newPage();
   openPages.push([name, page]);
   // Toko 3D dirender CPU di sandbox (tanpa GPU): hanya tab tamu yang menampilkannya,
@@ -124,6 +125,34 @@ try {
   await guest.waitForTimeout(3000);
   await shot(guest, '01-katalog');
   step(`katalog: ${cards} barang tersedia (terjual disembunyikan, bisa ditampilkan), animasi 3D & bubble berjalan`);
+
+  // ---------- share link produk ----------
+  {
+    const firstCard = guest.locator('.card').first();
+    const shareCode = await firstCard.locator('.photo-code').innerText();
+    await firstCard.locator('.share-btn').click();
+    // browser Linux headless tidak punya Web Share API -> otomatis jatuh ke salin tautan
+    await expectToast(guest, /Tautan barang disalin/);
+    const clip = await guest.evaluate(() => navigator.clipboard.readText());
+    if (!clip.includes(`?p=${shareCode}`)) throw new Error(`Tautan yang disalin tidak berisi kode barang: ${clip}`);
+    if (!clip.startsWith(BASE)) throw new Error(`Tautan yang disalin bukan URL lengkap: ${clip}`);
+
+    // buka tautan yang dibagikan di tab baru -> detail barang yang sama harus otomatis terbuka
+    const shared = await newPage('shared-link');
+    await shared.goto(clip);
+    await shared.waitForSelector('.card');
+    await shared.locator('.modal-head', { hasText: shareCode }).waitFor({ timeout: 8000 });
+    await shot(shared, '01b-share-link-deeplink');
+    await shared.close();
+
+    // kode yang tidak dikenal -> pesan error, bukan diam saja
+    const badLink = await newPage('bad-share-link');
+    await badLink.goto(BASE + '/?p=KODE-TIDAK-ADA-999');
+    await badLink.waitForSelector('.card');
+    await expectToast(badLink, /tidak ditemukan/);
+    await badLink.close();
+  }
+  step('bagikan tautan barang: disalin ke clipboard & tautannya membuka detail barang yang tepat');
   // gulir otomatis (mode layar TV) dimatikan agar klik uji stabil
   await db.query("update settings set value = '0' where key in ('auto_scroll', 'theme_effects')");
 

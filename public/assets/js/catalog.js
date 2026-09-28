@@ -3,7 +3,7 @@
 // ============================================================================
 import {
   sb, $, $$, esc, rupiah, duration, waLink, imgUrl, PLACEHOLDER, toast, modal, errText,
-  loadSettings, flag, getIdentity, getProfile, cart, renderNav, configured
+  loadSettings, flag, getIdentity, getProfile, cart, renderNav, configured, copyText
 } from './core.js';
 
 const state = {
@@ -39,7 +39,17 @@ async function init() {
   document.addEventListener('cart:open', openCart);
   document.addEventListener('cart:change', syncCartButtons);
   if (location.hash === '#cart') openCart();
+  openFromQuery();      // link yang dibagikan (?p=kode-atau-id) -> buka detail barangnya langsung
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshProducts(); });
+}
+
+// Buka detail barang otomatis kalau URL punya ?p=<kode-atau-id> (dari tautan yang dibagikan).
+function openFromQuery() {
+  const q = new URLSearchParams(location.search).get('p');
+  if (!q) return;
+  const target = state.products.find((x) => (x.code && x.code.toLowerCase() === q.toLowerCase()) || String(x.id) === q);
+  if (target) openDetail(target);
+  else toast('Barang yang Anda cari tidak ditemukan atau sudah tidak tayang', 'error');
 }
 
 async function loadAll() {
@@ -204,6 +214,7 @@ function renderGrid() {
     $('.photo', el).onclick = () => openDetail(p);
     $('.buy-btn', el)?.addEventListener('click', () => addToCart(p));
     $('.detail-btn', el).onclick = () => openDetail(p);
+    $('.share-btn', el).onclick = () => shareProduct(p);
   });
   tick();
 }
@@ -249,11 +260,33 @@ function cardHtml(p) {
       ${priceBlock(p)}
       ${flash}
       <div class="actions">
+        <button class="share-btn" type="button" title="Bagikan barang ini" aria-label="Bagikan barang ini">🔗<span class="share-btn-label">Bagikan</span></button>
         <button class="detail-btn" type="button">Detail barang</button>
         <button class="buy-btn ${inCart ? 'in-cart' : ''}" type="button">${inCart ? '✓ Di keranjang' : '+ Keranjang'}</button>
         <span class="sold-contact">Stok habis</span>
       </div>
     </div></article>`;
+}
+
+// URL yang bisa dibagikan dan langsung membuka detail barang ini (?p=<kode-atau-id>).
+function productUrl(p) {
+  const u = new URL(location.href);
+  u.hash = '';
+  u.search = '';
+  u.searchParams.set('p', p.code || p.id);
+  return u.toString();
+}
+
+async function shareProduct(p) {
+  const url = productUrl(p);
+  const storeName = state.settings.store_name || 'Compassion Market';
+  const text = `${p.name}${p.code ? ' (' + p.code + ')' : ''} — ${rupiah(p.effective_price ?? p.price)} di ${storeName}`;
+  if (navigator.share) {
+    try { await navigator.share({ title: p.name, text, url }); return; }
+    catch (e) { if (e?.name === 'AbortError') return; /* dibatalkan pengguna -- diam saja */ }
+  }
+  await copyText(url);
+  toast('Tautan barang disalin — tinggal tempel ke chat/WhatsApp', 'ok');
 }
 
 function syncCartButtons() {
@@ -292,7 +325,11 @@ function openDetail(p) {
         </tbody></table>
         ${state.settings.admin_whatsapp ? `<a class="btn btn-ghost btn-sm" style="margin-top:10px" href="${waLink(state.settings.admin_whatsapp, `Halo, saya tertarik dengan ${p.name} (${p.code}) dari ${p.seller_name || '-'}. Apakah masih tersedia?`)}" target="_blank" rel="noopener noreferrer">Tanya via WhatsApp ↗</a>` : ''}
         </div></div>`,
-    actions: p.stock > 0 ? [{ label: 'Tutup' }, { label: cart.has(p.id) ? 'Lihat keranjang' : '+ Tambah ke keranjang', cls: 'btn-primary', onClick: () => { if (cart.has(p.id)) openCart(); else addToCart(p); } }] : [{ label: 'Tutup' }]
+    actions: [
+      { label: 'Tutup' },
+      { label: '🔗 Bagikan', onClick: async () => { await shareProduct(p); return false; } },
+      ...(p.stock > 0 ? [{ label: cart.has(p.id) ? 'Lihat keranjang' : '+ Tambah ke keranjang', cls: 'btn-primary', onClick: () => { if (cart.has(p.id)) openCart(); else addToCart(p); } }] : [])
+    ]
   });
   $$('.gallery-thumbs img', m.body).forEach((t) => (t.onclick = () => {
     $('.gallery-main', m.body).src = t.src;
