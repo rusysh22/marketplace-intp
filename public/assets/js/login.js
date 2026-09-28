@@ -6,9 +6,15 @@ const safeNext = /^[\w.-]+\.html(\?[^#]*)?(#\w+)?$/.test(next) ? next : 'index.h
 
 (async () => {
   await renderNav('login');
-  if (safeNext.startsWith('admin.html')) showAdmin();
-  if (await getProfile()) { location.replace(safeNext); return; }
-  if (!safeNext.startsWith('admin.html') && getIdentity()) { location.replace(safeNext); return; }
+  const wantsAdmin = safeNext.startsWith('admin.html');
+  if (wantsAdmin) showAdmin();
+  // Sesi admin (Supabase Auth) hanya cukup untuk masuk ke admin.html. Untuk halaman
+  // lain (jual barang, pesanan) tetap wajib identitas karyawan dipilih -- seorang
+  // admin belum tentu punya identitas karyawan, dan sebaliknya. Menyamakan
+  // keduanya di sini pernah menyebabkan login.html <-> orders.html saling
+  // redirect tanpa henti.
+  if (wantsAdmin) { if (await getProfile()) { location.replace(safeNext); return; } }
+  else if (getIdentity()) { location.replace(safeNext); return; }
 
   const result = $('#emp-result');
   $('#form-identity').onsubmit = async (e) => {

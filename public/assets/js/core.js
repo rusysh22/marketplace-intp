@@ -148,6 +148,32 @@ export async function loadSettings(force = false) {
 }
 export const flag = (s, k) => String(s?.[k] ?? '') === '1';
 
+// Pemutus lingkaran redirect: beberapa halaman saling memutuskan "sudah boleh
+// masuk?" saat dimuat (login.html <-> halaman yang butuh sesi). Sebuah bug pada
+// salah satu sisi pernah membuat keduanya saling redirect tanpa henti. Ini bukan
+// perbaikan bug itu (lihat login.js), tapi jaring pengaman: kalau redirect
+// otomatis terjadi berkali-kali dalam waktu singkat, hentikan dan tampilkan
+// pesan yang bisa dipulihkan alih-alih membekukan tab pengguna selamanya.
+const REDIRECT_GUARD_KEY = 'cm_redirect_guard_v1';
+function guardedRedirectToLogin(next) {
+  let n = 1;
+  try {
+    const rec = JSON.parse(sessionStorage.getItem(REDIRECT_GUARD_KEY) || 'null');
+    n = rec && Date.now() - rec.t < 5000 ? rec.n + 1 : 1;
+    sessionStorage.setItem(REDIRECT_GUARD_KEY, JSON.stringify({ n, t: Date.now() }));
+  } catch {}
+  if (n > 4) {
+    try { sessionStorage.removeItem(REDIRECT_GUARD_KEY); } catch {}
+    document.body.innerHTML = `<div class="wrap" style="max-width:480px;padding:60px 0"><div class="panel">
+        <h2 style="margin-top:0">Gagal memuat halaman</h2>
+        <p>Terjadi pengalihan berulang antara halaman masuk dan halaman ini. Sesi Anda sudah dibersihkan
+           dari perangkat ini — silakan masuk kembali.</p>
+        <a class="btn btn-primary" href="login.html">Ke halaman masuk</a></div></div>`;
+    return;
+  }
+  location.href = 'login.html?next=' + encodeURIComponent(next);
+}
+
 // ---------- sesi admin (satu-satunya yang pakai Supabase Auth: email + password) ----------
 let profileCache;
 export async function getProfile(force = false) {
@@ -160,7 +186,7 @@ export async function getProfile(force = false) {
 }
 export async function requireAdminSession() {
   const p = await getProfile();
-  if (!p) { location.href = 'login.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search + location.hash); return null; }
+  if (!p) { guardedRedirectToLogin(location.pathname.split('/').pop() + location.search + location.hash); return null; }
   return p;
 }
 export async function logoutAdmin() {
@@ -184,9 +210,9 @@ export function clearIdentity() {
 }
 export async function requireIdentity() {
   const cur = getIdentity();
-  if (!cur) { location.href = 'login.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search + location.hash); return null; }
+  if (!cur) { guardedRedirectToLogin(location.pathname.split('/').pop() + location.search + location.hash); return null; }
   const { data, error } = await sb.rpc('my_profile', { p_actor: cur.id });
-  if (error || !data) { clearIdentity(); location.href = 'login.html?next=' + encodeURIComponent(location.pathname.split('/').pop() + location.search + location.hash); return null; }
+  if (error || !data) { clearIdentity(); guardedRedirectToLogin(location.pathname.split('/').pop() + location.search + location.hash); return null; }
   setIdentity(data);
   return data;
 }
