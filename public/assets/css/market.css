@@ -211,6 +211,10 @@
 .spec-row{display:contents}
 .spec-row dt{margin:0;color:var(--muted);font-weight:700;white-space:nowrap}
 .spec-row dd{margin:0;color:var(--ink)}
+.spec-extra{display:none}
+.spec-list.expanded .spec-extra{display:contents}
+.spec-toggle{display:block;margin:7px 0 0;padding:0;border:0;background:none;color:var(--teal-strong);font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+.spec-toggle:hover{text-decoration:underline}
 
 /* ---------- gulir otomatis ---------- */
 .auto-scroll-toggle{position:fixed;z-index:30;right:14px;bottom:14px;display:inline-flex;align-items:center;gap:7px;padding:10px 13px;border:1px solid rgba(255,255,255,.75);border-radius:999px;background:rgba(18,60,86,.94);box-shadow:0 5px 20px rgba(13,36,55,.28);color:#fff;font:inherit;font-size:11px;font-weight:850;cursor:pointer}

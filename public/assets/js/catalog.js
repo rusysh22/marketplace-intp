@@ -338,9 +338,18 @@ function renderDescription(text) {
     else lead.push(part);
   });
   if (specs.length < 3) return `<p class="desc-text">${esc(t)}</p>`;
+  // Spesifikasi bisa sangat panjang (mis. raket tenis) -- default tampilkan ringkas saja,
+  // sisanya baru muncul lewat tombol "Lihat spesifikasi lengkap" (lihat wireSpecToggle()).
+  const PREVIEW = 5;
+  const row = ([k, v]) => `<div class="spec-row"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
+  const rest = specs.length - PREVIEW;
+  const more = `Lihat spesifikasi lengkap (${rest} lainnya) ▾`;
   return `${heading ? `<p class="desc-text desc-heading">${esc(heading)}</p>` : ''}
     ${lead.length ? `<p class="desc-text">${esc(lead.join(' • '))}</p>` : ''}
-    <dl class="spec-list">${specs.map(([k, v]) => `<div class="spec-row"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+    <dl class="spec-list">${specs.slice(0, PREVIEW).map(row).join('')}${rest > 0
+      ? `<div class="spec-row spec-extra">${specs.slice(PREVIEW).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</div>`
+      : ''}</dl>
+    ${rest > 0 ? `<button type="button" class="spec-toggle" data-more="${esc(more)}" data-less="Sembunyikan spesifikasi ▴">${esc(more)}</button>` : ''}`;
 }
 
 function openDetail(p) {
@@ -374,6 +383,12 @@ function openDetail(p) {
   }));
   const shareBtn = $$('.modal-foot .btn', m.el).find((b) => b.textContent.trim() === 'Bagikan');
   if (shareBtn) shareBtn.innerHTML = `${SHARE_ICON}<span>Bagikan</span>`;
+  const specToggle = $('.spec-toggle', m.body);
+  if (specToggle) specToggle.onclick = () => {
+    const list = specToggle.previousElementSibling;
+    const expanded = list.classList.toggle('expanded');
+    specToggle.textContent = expanded ? specToggle.dataset.less : specToggle.dataset.more;
+  };
 }
 
 // ---------- keranjang & checkout ----------
