@@ -88,6 +88,23 @@ try {
   await addEmployee(admin, 'Budi Pembeli', 'Ops', 'budi.pembeli.e2e@interport.co.id');
   step('admin login & mendaftarkan 2 karyawan');
 
+  // ---------- regresi: sesi admin tanpa identitas karyawan tidak boleh looping ----------
+  // (login.html sempat menganggap sesi admin cukup untuk lolos ke halaman yang
+  // sebenarnya butuh identitas karyawan, sehingga login.html <-> orders.html
+  // saling redirect tanpa henti)
+  {
+    const navs = [];
+    const onNav = (f) => { if (f === admin.mainFrame()) navs.push(f.url()); };
+    admin.on('framenavigated', onNav);
+    await admin.goto(BASE + '/orders.html');
+    await admin.waitForTimeout(4000);
+    admin.off('framenavigated', onNav);
+    if (navs.length > 6) throw new Error(`Redirect looping login.html <-> orders.html terdeteksi (${navs.length} navigasi): ${navs.slice(0, 10).join(' -> ')}`);
+    if (!admin.url().includes('login.html')) throw new Error('Sesi admin tanpa identitas karyawan seharusnya berhenti di halaman "Pilih identitas", dapat: ' + admin.url());
+    await admin.waitForSelector('#form-identity');
+  }
+  step('sesi admin tanpa identitas karyawan berhenti di halaman pilih identitas (tidak looping)');
+
   // ---------- katalog awal ----------
   const guest = await newPage('guest', { with3d: true });
   await guest.goto(BASE + '/');
