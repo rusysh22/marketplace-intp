@@ -33,7 +33,6 @@ async function init() {
   renderPayment();
   renderFilters();
   renderGrid();
-  renderFooter();
   setInterval(tick, 1000);
   tick();
   init3D();
@@ -104,18 +103,6 @@ function renderPayment() {
       <span>Tanya admin <small>WhatsApp ${esc(formatPhone(wa))}</small></span></a>` : ''}`;
 }
 const formatPhone = (n) => String(n).replace(/^62/, '0').replace(/(\d{4})(\d{4})(\d+)/, '$1-$2-$3');
-
-function renderFooter() {
-  const s = state.settings;
-  if (!flag(s, 'footer_enabled')) return;
-  const links = String(s.footer_links || '').split('\n').map((l) => l.split('|')).filter((x) => x[1]);
-  const f = $('#market-footer');
-  f.hidden = false;
-  f.innerHTML = `<div class="footer-inner wrap">
-    ${s.footer_embed_url ? `<div class="voucher-preview"><iframe src="${esc(s.footer_embed_url)}" title="${esc(s.footer_title)}" loading="lazy" allowfullscreen></iframe></div>` : '<div></div>'}
-    <div class="voucher-copy"><span class="footer-kicker">${esc(s.footer_kicker)}</span><h2>${esc(s.footer_title)}</h2><p>${esc(s.footer_text)}</p>
-      <div class="footer-links">${links.map(([l, u]) => `<a href="${esc(u.trim())}" target="_blank" rel="noopener noreferrer">${esc(l.trim())} ↗</a>`).join('')}</div></div></div>`;
-}
 
 // ---------- toolbar ----------
 function bindToolbar() {

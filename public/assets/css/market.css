@@ -1,6 +1,6 @@
 /* ==========================================================================
    Katalog — diadaptasi dari desain katalog statis Compassion Market
-   (kartu produk, flash sale, pembayaran, footer voucher, label cetak, efek disko)
+   (kartu produk, flash sale, pembayaran, label cetak, efek disko)
    ========================================================================== */
 
 /* ---------- header merek ---------- */
@@ -181,19 +181,6 @@
   .market.view-list .summary{display:none}
 }
 @media(max-width:380px){.grid{grid-template-columns:1fr}}
-
-/* ---------- footer voucher ---------- */
-.market-footer{background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,.8);padding:25px 0}
-.footer-inner{display:grid;grid-template-columns:minmax(180px,270px) minmax(0,1fr);align-items:center;gap:24px}
-.voucher-preview{position:relative;aspect-ratio:3.1/1;border-radius:12px;overflow:hidden;background:#d0e8df;border:1px solid #b7dcd0;box-shadow:0 10px 25px rgba(16,70,70,.1)}
-.voucher-preview iframe{position:absolute;left:0;top:-66%;width:100%;height:232%;border:0;pointer-events:none}
-.footer-kicker{display:block;color:#168673;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px}
-.voucher-copy h2{color:#194a55;font-size:clamp(20px,2.4vw,28px);line-height:1.15;letter-spacing:-.03em;margin:0 0 8px}
-.voucher-copy p{color:#4e7273;font-size:12px;margin:0}
-.footer-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}
-.footer-links a{display:inline-flex;align-items:center;justify-content:center;padding:10px 13px;border-radius:9px;background:#fff;color:#145a54;border:1px solid #c6dfd5;text-decoration:none;font-size:11px;font-weight:900;white-space:nowrap}
-.footer-links a:first-child{background:#176f62;color:#fff;border-color:#176f62}
-@media(max-width:730px){.footer-inner{grid-template-columns:1fr;gap:15px}.voucher-preview{width:min(100%,300px)}.footer-links a{flex:1}}
 
 /* ---------- galeri detail ---------- */
 .gallery-main{width:100%;aspect-ratio:4/3;object-fit:contain;background:#f1f6f5;border-radius:12px}

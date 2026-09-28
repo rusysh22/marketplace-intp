@@ -66,8 +66,8 @@ Padanan istilah ERP (D365 / Odoo) supaya mudah dipetakan:
 ## Fitur
 
 **Katalog (index.html)**
-- Data dinamis dari database; desain, warna, kartu produk, flash sale, tampilan grid/list, latar pelangi, dan
-  footer voucher dari katalog lama tetap ada — semua bisa dinyalakan/dimatikan admin.
+- Data dinamis dari database; desain, warna, kartu produk, flash sale, tampilan grid/list, latar pelangi —
+  semua bisa dinyalakan/dimatikan admin.
 - **Barang terjual disembunyikan secara default.** Pengunjung bisa mencentang "Tampilkan yang terjual (n)"
   untuk melihatnya (tampil dengan label *OUT OF STOCK*). Jumlah per jenis barang di filter ikut menyesuaikan.
 - Filter jenis barang (dengan jumlah), pencarian (nama/kode/penjual), urutan (rekomendasi, harga, nama, terbaru).
@@ -205,7 +205,7 @@ Karyawan masuk dengan mengetik **email kantor `@interport.co.id` miliknya lengka
 ### 7. Lengkapi master data di menu Admin
 - **Metode pembayaran** → edit *QRIS* → unggah gambar QR → centang Aktif. Cek rekening BCA/Mandiri.
 - **Pengaturan** → nomor WhatsApp admin, info pengambilan barang, batas bayar, biaya admin, komisi,
-  tampilan (3D, efek latar, gulir otomatis), footer voucher.
+  tampilan (3D, efek latar, gulir otomatis).
   Gulir otomatis (mode layar TV) **mati secara default**; nyalakan hanya jika katalog ditayangkan di layar TV.
   Jika seed lama (dengan gulir otomatis menyala) sudah terlanjur dijalankan, matikan dengan:
   `update public.settings set value = '0' where key = 'auto_scroll';`

@@ -30,13 +30,7 @@ insert into public.settings (key, value) values
   ('site_url', ''),
   ('enable_share_card', '0'),
   ('theme_effects', '1'),
-  ('auto_scroll', '0'),
-  ('footer_enabled', '1'),
-  ('footer_kicker', 'Bonus untuk setiap pembelian produk'),
-  ('footer_title', 'Voucher kopi 20% di Brew to Inspire'),
-  ('footer_text', 'Setiap pembelian produk mendapatkan voucher diskon 20% untuk pembelian kopi di Brew to Inspire.'),
-  ('footer_embed_url', 'https://www.canva.com/design/DAHWBqzMAhQ/_Mc4Kt5Ee3TXZIRxnAaKag/view?embed'),
-  ('footer_links', E'Lihat voucher|https://www.canva.com/design/DAHWBqzMAhQ/_Mc4Kt5Ee3TXZIRxnAaKag/view\nKatalog Barang|https://deskit.interport.co.id/p/doc/0a750929-288f-4ccd-afde-3973bb67d3cb/')
+  ('auto_scroll', '0')
 on conflict (key) do nothing;
 
 -- Jenis barang. zone = area pajangan di toko 3D.
