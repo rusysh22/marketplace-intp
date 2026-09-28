@@ -122,6 +122,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13px}
 .drawer .modal-body{flex:1}
 .cart-line{display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #edf3f1}
 .cart-line .info{flex:1;min-width:0}
+.cart-line.just-added{background:var(--ok-soft);margin:0 -10px;padding:10px;border-radius:10px;animation:fade .4s}
+.cart-line .info .badge{display:inline-flex}
 .cart-line .info strong{display:block;font-size:13px;line-height:1.3}
 .cart-line .info small{color:var(--muted);font-size:11px}
 .sum-row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0}
