@@ -269,7 +269,7 @@ function addToCart(p) {
   if (p.stock <= 0) return;
   if (cart.has(p.id)) { openCart(); return; }
   cart.add(p);
-  toast(`"${p.name}" masuk keranjang`, 'ok');
+  openCart({ justAdded: p.id });          // tampilkan keranjang langsung setelah menambah barang
 }
 
 // ---------- detail + galeri ----------
@@ -308,22 +308,24 @@ function cartLines() {
   });
 }
 
-function openCart() {
+function openCart({ justAdded } = {}) {
   history.replaceState(null, '', location.pathname + location.search);
   $('.drawer')?.remove(); $('.drawer-backdrop')?.remove();
   const bd = document.createElement('div'); bd.className = 'drawer-backdrop';
   const dr = document.createElement('aside'); dr.className = 'drawer'; dr.setAttribute('aria-label', 'Keranjang');
-  const close = () => { bd.remove(); dr.remove(); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => { bd.remove(); dr.remove(); document.removeEventListener('keydown', onKey); };
   bd.onclick = close;
+  document.addEventListener('keydown', onKey);
   document.body.append(bd, dr);
   const draw = () => {
     const lines = cartLines();
     const subtotal = lines.filter((l) => l.available > 0).reduce((a, l) => a + l.price * Math.min(l.qty, l.available), 0);
     dr.innerHTML = `<div class="modal-head"><h3>Keranjang</h3><button class="x-btn" type="button" aria-label="Tutup">×</button></div>
       <div class="modal-body">${lines.length ? lines.map((l) => `
-        <div class="cart-line" data-id="${l.id}">
+        <div class="cart-line ${l.id === justAdded ? 'just-added' : ''}" data-id="${l.id}">
           <img class="thumb" src="${esc(l.image ? imgUrl(l.image) : PLACEHOLDER)}" alt="">
-          <div class="info"><strong>${esc(l.name)}</strong><small>${esc(l.code || '')} · ${rupiah(l.price)}</small>
+          <div class="info">${l.id === justAdded ? '<span class="badge ok" style="margin-bottom:3px">✓ Baru ditambahkan</span>' : ''}<strong>${esc(l.name)}</strong><small>${esc(l.code || '')} · ${rupiah(l.price)}</small>
             ${l.available <= 0 ? '<div><span class="badge danger">Stok habis</span></div>' : l.available > 1
               ? `<div style="margin-top:4px"><input type="number" min="1" max="${l.available}" value="${Math.min(l.qty, l.available)}" style="width:70px;min-height:30px;padding:4px 7px" aria-label="Jumlah"> <small>maks ${l.available}</small></div>` : ''}
           </div>
@@ -333,8 +335,10 @@ function openCart() {
       ${lines.length ? `<div class="modal-foot" style="display:block">
         <div class="sum-row"><span>Subtotal</span><strong>${rupiah(subtotal)}</strong></div>
         <p class="small muted" style="margin:4px 0 10px">Stok dikunci untuk Anda setelah checkout selama ${esc(state.settings.order_expiry_hours || 24)} jam sampai pembayaran diverifikasi.</p>
-        <button class="btn btn-primary btn-block" type="button" data-checkout ${subtotal ? '' : 'disabled'}>Checkout</button></div>` : ''}`;
+        <button class="btn btn-primary btn-block" type="button" data-checkout ${subtotal ? '' : 'disabled'}>Checkout</button>
+        <button class="btn btn-ghost btn-block" type="button" data-continue style="margin-top:8px">Lanjut belanja</button></div>` : ''}`;
     $('.x-btn', dr).onclick = close;
+    $('[data-continue]', dr)?.addEventListener('click', close);
     $$('.cart-line', dr).forEach((row) => {
       const id = Number(row.dataset.id);
       $('[data-rm]', row).onclick = () => { cart.remove(id); draw(); };
@@ -343,6 +347,7 @@ function openCart() {
     $('[data-checkout]', dr)?.addEventListener('click', async () => { close(); await checkout(); });
   };
   draw();
+  (justAdded ? $('[data-checkout]', dr) : $('.x-btn', dr))?.focus();
 }
 
 async function checkout() {

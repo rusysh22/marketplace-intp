@@ -88,7 +88,8 @@ export function modal({ title, body, actions = [], wide = false, onClose }) {
     foot.appendChild(b);
   });
   document.body.appendChild(bd);
-  setTimeout(() => $('input,select,textarea', bodyEl)?.focus(), 30);
+  // fokus ke input pertama, kecuali pengguna sudah lebih dulu fokus ke elemen lain di modal
+  setTimeout(() => { if (!bd.contains(document.activeElement)) $('input,select,textarea', bodyEl)?.focus(); }, 30);
   return { el: bd, body: bodyEl, close };
 }
 

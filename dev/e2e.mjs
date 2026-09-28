@@ -178,15 +178,16 @@ try {
   const sony = buyer.locator('.card', { hasText: 'Sony' });
   await sony.locator('.flash.sale-active').waitFor();
   await sony.locator('.buy-btn').click();
+  // keranjang harus langsung muncul setelah klik "+ Keranjang"
+  await buyer.locator('.drawer .cart-line.just-added', { hasText: 'Sony' }).waitFor({ timeout: 5000 });
+  await buyer.click('.drawer [data-continue]');
+  if (await buyer.locator('.drawer').count()) throw new Error('"Lanjut belanja" harus menutup keranjang');
   await buyer.fill('#search', 'parka');
   await buyer.locator('.card', { hasText: 'Parka' }).locator('.buy-btn').click();
-  await buyer.fill('#search', '');
-  await buyer.waitForTimeout(3500);
-  await buyer.evaluate(() => window.scrollTo(0, 0));
-  await shot(buyer, '06-katalog-flash-3d');
-  await buyer.click('[data-open-cart]');
-  await buyer.waitForSelector('.drawer [data-checkout]');
+  await buyer.locator('.drawer .cart-line.just-added', { hasText: 'Parka' }).waitFor({ timeout: 5000 });
+  if (await buyer.locator('.drawer .cart-line').count() !== 2) throw new Error('Keranjang harus berisi 2 barang');
   await shot(buyer, '07-keranjang');
+  step('klik "+ Keranjang" langsung membuka keranjang (barang baru ditandai, "Lanjut belanja" menutup)');
   await buyer.click('.drawer [data-checkout]');
   await buyer.locator('.modal', { hasText: 'Checkout' }).waitFor();
   await buyer.locator('.pay-option', { hasText: 'BCA' }).click();
