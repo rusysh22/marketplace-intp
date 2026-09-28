@@ -16,6 +16,7 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { buildSharePage } from '../supabase/functions/share/template.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 54321);
@@ -234,6 +235,27 @@ function proxyRest(req, res, url) {
   req.pipe(up);
 }
 
+// ---------- Edge Function tiruan: kartu bagikan (share card) ----------
+// Meniru supabase/functions/share/index.ts, tapi query langsung ke Postgres lokal
+// (bukan lewat REST/PostgREST) supaya tidak perlu jaringan sama sekali saat diuji.
+async function handleShareFunction(req, res, url) {
+  const code = url.searchParams.get('p') || '';
+  const settingsRows = await pool.query('select key, value from public.settings');
+  const settings = Object.fromEntries(settingsRows.rows.map((r) => [r.key, r.value ?? '']));
+  let product = null;
+  if (code) {
+    const isNum = /^\d+$/.test(code);
+    const q = isNum
+      ? await pool.query('select * from public.catalog where code = $1 or id = $2 limit 1', [code, Number(code)])
+      : await pool.query('select * from public.catalog where code = $1 limit 1', [code]);
+    product = q.rows[0] || null;
+  }
+  const siteUrl = settings.site_url || `http://${req.headers.host}`;
+  const { html, status } = buildSharePage({ supabaseUrl: `http://${req.headers.host}`, siteUrl, code, product, settings });
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', ...CORS });
+  res.end(html);
+}
+
 // ---------- statis ----------
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon' };
 function serveStatic(req, res, url) {
@@ -260,6 +282,7 @@ http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/rest/v1')) return proxyRest(req, res, url);
     if (url.pathname.startsWith('/auth/v1')) return await handleAuth(req, res, url);
     if (url.pathname.startsWith('/storage/v1')) return await handleStorage(req, res, url);
+    if (url.pathname === '/functions/v1/share') return await handleShareFunction(req, res, url);
     return serveStatic(req, res, url);
   } catch (e) {
     console.error(e);

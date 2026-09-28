@@ -696,7 +696,11 @@ const SETTING_GROUPS = [
   ['Footer voucher', [
     { k: 'footer_enabled', label: 'Tampilkan footer', type: 'check' }, { k: 'footer_kicker', label: 'Kicker' }, { k: 'footer_title', label: 'Judul', span: 'span-2' },
     { k: 'footer_text', label: 'Teks', type: 'textarea', span: 'span-all' }, { k: 'footer_embed_url', label: 'URL embed (Canva, dsb.)', span: 'span-all' },
-    { k: 'footer_links', label: 'Tautan (satu per baris: Label|URL)', type: 'textarea', span: 'span-all' }]]
+    { k: 'footer_links', label: 'Tautan (satu per baris: Label|URL)', type: 'textarea', span: 'span-all' }]],
+  ['Kartu bagikan (share card)', [
+    { k: 'enable_share_card', label: 'Tampilkan foto, harga & nama toko saat tautan barang dibagikan ke chat', type: 'check' },
+    { k: 'site_url', label: 'URL situs katalog (mis. https://market.interport.co.id)', span: 'span-all',
+      help: 'Wajib diisi supaya kartu bagikan aktif. Perlu Edge Function "share" sudah di-deploy (lihat README).' }]]
 ];
 async function settingsSec() {
   const s = await loadSettings(true);

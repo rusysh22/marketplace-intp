@@ -218,6 +218,23 @@ berjalan walau sepi, aktifkan ekstensi **pg_cron** (Database → Extensions) lal
 select cron.schedule('cm-expire-orders', '*/10 * * * *', 'select public.expire_orders()');
 ```
 
+### 9. (Opsional) Kartu bagikan — foto/harga muncul saat tautan barang dibagikan ke chat
+Karena situs ini statis (tidak ada server-side rendering), WhatsApp/Telegram/dll tidak bisa membaca meta
+Open Graph dari halaman katalog secara langsung. Fungsinya dibantu Edge Function `share` yang menyajikan
+halaman HTML berisi meta `og:*` (foto, judul, harga, nama toko), lalu meneruskan pengguna sungguhan ke
+halaman katalog aslinya.
+
+1. Deploy fungsinya (butuh [Supabase CLI](https://supabase.com/docs/guides/cli)):
+   ```sh
+   supabase functions deploy share --no-verify-jwt
+   ```
+   `--no-verify-jwt` wajib — crawler chat app memanggil URL ini tanpa login.
+2. Di menu **Admin → Pengaturan → Kartu bagikan (share card)**: isi **URL situs katalog** (alamat tempat
+   folder `public/` di-hosting, mis. `https://market.contoh.com`) dan centang untuk mengaktifkan.
+3. Setelah aktif, tombol "Bagikan" akan membagikan tautan
+   `<SUPABASE_URL>/functions/v1/share?p=<kode-barang>` alih-alih tautan katalog langsung. Kalau belum
+   diisi/diaktifkan, fitur bagikan tetap bekerja seperti biasa (tautan katalog biasa, tanpa kartu pratinjau).
+
 ---
 
 ## Struktur folder
@@ -233,6 +250,7 @@ public/                     ← situs statis (ini yang di-hosting)
   assets/css/                 app.css (komponen), market.css (katalog), pages.css
   assets/js/                  core.js, catalog.js, store3d.js, sell.js, orders.js, admin.js, login.js
 supabase/migrations/        ← skema, fungsi, RLS/Storage, data awal
+supabase/functions/share/   ← Edge Function kartu bagikan (Open Graph), opsional
 dev/                        ← HANYA untuk pengembangan & pengujian lokal
 ```
 

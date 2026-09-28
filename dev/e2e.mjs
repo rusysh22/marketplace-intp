@@ -153,6 +153,43 @@ try {
     await badLink.close();
   }
   step('bagikan tautan barang: disalin ke clipboard & tautannya membuka detail barang yang tepat');
+
+  // ---------- kartu bagikan (share card / Open Graph) ----------
+  {
+    const firstCard = guest.locator('.card').first();
+    const shareCode = await firstCard.locator('.photo-code').innerText();
+    // belum diaktifkan admin -> tetap pakai tautan katalog biasa (tidak ada perubahan perilaku)
+    await firstCard.locator('.share-btn').click();
+    await expectToast(guest, /Tautan barang disalin/);
+    let clip = await guest.evaluate(() => navigator.clipboard.readText());
+    if (clip.includes('/functions/v1/share')) throw new Error('Kartu bagikan belum diaktifkan admin tapi tautan sudah memakai Edge Function: ' + clip);
+
+    await db.query("update settings set value = '1' where key = 'enable_share_card'");
+    await db.query("update settings set value = $1 where key = 'site_url'", [BASE]);
+
+    const r = await fetch(`${BASE}/functions/v1/share?p=${shareCode}`);
+    const html = await r.text();
+    if (!r.ok) throw new Error(`Edge Function share mengembalikan status ${r.status}`);
+    if (!html.includes('property="og:title"') || !html.includes('property="og:image"') || !html.includes('property="og:site_name" content="Compassion Market"'))
+      throw new Error('Halaman kartu bagikan tidak memuat meta Open Graph yang lengkap (judul/foto/nama toko)');
+    if (!html.includes('product:price:amount')) throw new Error('Halaman kartu bagikan tidak memuat harga barang');
+    if (!html.includes(`?p=${shareCode}`)) throw new Error('Halaman kartu bagikan tidak mengalihkan ke barang yang benar');
+
+    const notFound = await fetch(`${BASE}/functions/v1/share?p=KODE-TIDAK-ADA-999`);
+    if (notFound.status !== 404) throw new Error('Kode barang tak dikenal seharusnya mengembalikan status 404, dapat ' + notFound.status);
+
+    await guest.reload();
+    await guest.waitForSelector('.card');
+    await guest.locator('.card').first().locator('.share-btn').click();
+    await expectToast(guest, /Tautan barang disalin/);
+    clip = await guest.evaluate(() => navigator.clipboard.readText());
+    if (!clip.includes('/functions/v1/share?p=')) throw new Error('Setelah diaktifkan admin, tautan bagikan seharusnya memakai Edge Function share: ' + clip);
+
+    await db.query("update settings set value = '0' where key = 'enable_share_card'");
+    await db.query("update settings set value = '' where key = 'site_url'");
+  }
+  step('kartu bagikan: kartu OG aktif menampilkan foto/harga/nama toko, nonaktif tetap pakai tautan biasa');
+
   // gulir otomatis (mode layar TV) dimatikan agar klik uji stabil
   await db.query("update settings set value = '0' where key in ('auto_scroll', 'theme_effects')");
 

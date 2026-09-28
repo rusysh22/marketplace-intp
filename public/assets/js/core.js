@@ -3,6 +3,7 @@
 // ============================================================================
 const cfg = window.CM_CONFIG || {};
 export const configured = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && !/xxxx/.test(cfg.SUPABASE_URL));
+export const SUPABASE_URL = cfg.SUPABASE_URL || '';
 
 export const sb = window.supabase.createClient(
   cfg.SUPABASE_URL || 'http://localhost:54321',

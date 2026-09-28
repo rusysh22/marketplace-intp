@@ -27,6 +27,8 @@ insert into public.settings (key, value) values
   ('max_photos_per_item', '5'),
   ('enable_3d', '1'),
   ('enable_3d_people', '1'),
+  ('site_url', ''),
+  ('enable_share_card', '0'),
   ('theme_effects', '1'),
   ('auto_scroll', '0'),
   ('footer_enabled', '1'),
