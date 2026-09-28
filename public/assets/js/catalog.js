@@ -11,6 +11,8 @@ const state = {
   filter: 'all', search: '', sort: 'default', view: 'grid', phaseKey: '', showSold: false, isAdmin: false
 };
 const collator = new Intl.Collator('id', { sensitivity: 'base', numeric: true });
+// Ikon rantai/link (bukan pesawat kertas) untuk tombol bagikan.
+const SHARE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-2.83 2.83a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
 
 init();
 
@@ -31,7 +33,6 @@ async function init() {
   renderPayment();
   renderFilters();
   renderGrid();
-  renderFooter();
   setInterval(tick, 1000);
   tick();
   init3D();
@@ -102,18 +103,6 @@ function renderPayment() {
       <span>Tanya admin <small>WhatsApp ${esc(formatPhone(wa))}</small></span></a>` : ''}`;
 }
 const formatPhone = (n) => String(n).replace(/^62/, '0').replace(/(\d{4})(\d{4})(\d+)/, '$1-$2-$3');
-
-function renderFooter() {
-  const s = state.settings;
-  if (!flag(s, 'footer_enabled')) return;
-  const links = String(s.footer_links || '').split('\n').map((l) => l.split('|')).filter((x) => x[1]);
-  const f = $('#market-footer');
-  f.hidden = false;
-  f.innerHTML = `<div class="footer-inner wrap">
-    ${s.footer_embed_url ? `<div class="voucher-preview"><iframe src="${esc(s.footer_embed_url)}" title="${esc(s.footer_title)}" loading="lazy" allowfullscreen></iframe></div>` : '<div></div>'}
-    <div class="voucher-copy"><span class="footer-kicker">${esc(s.footer_kicker)}</span><h2>${esc(s.footer_title)}</h2><p>${esc(s.footer_text)}</p>
-      <div class="footer-links">${links.map(([l, u]) => `<a href="${esc(u.trim())}" target="_blank" rel="noopener noreferrer">${esc(l.trim())} ↗</a>`).join('')}</div></div></div>`;
-}
 
 // ---------- toolbar ----------
 function bindToolbar() {
@@ -260,7 +249,7 @@ function cardHtml(p) {
       ${priceBlock(p)}
       ${flash}
       <div class="actions">
-        <button class="share-btn" type="button" title="Bagikan barang ini" aria-label="Bagikan barang ini">🔗<span class="share-btn-label">Bagikan</span></button>
+        <button class="share-btn" type="button" title="Bagikan barang ini" aria-label="Bagikan barang ini">${SHARE_ICON}<span class="share-btn-label">Bagikan</span></button>
         <button class="detail-btn" type="button">Detail barang</button>
         <button class="buy-btn ${inCart ? 'in-cart' : ''}" type="button">${inCart ? '✓ Di keranjang' : '+ Keranjang'}</button>
         <span class="sold-contact">Stok habis</span>
@@ -277,8 +266,19 @@ function productUrl(p) {
   return u.toString();
 }
 
+// Kalau kartu bagikan diaktifkan admin (foto/harga muncul saat dibagikan ke chat), pakai tautan
+// "/share" di domain situs sendiri -- bukan domain *.supabase.co -- yang diteruskan (proxy/rewrite)
+// ke Edge Function "share" oleh hosting (lihat panduan proxy di README). Kalau belum
+// diaktifkan/dikonfigurasi, pakai tautan katalog biasa seperti sebelumnya.
+function shareUrl(p) {
+  if (flag(state.settings, 'enable_share_card') && state.settings.site_url) {
+    return `${state.settings.site_url.replace(/\/$/, '')}/share?p=${encodeURIComponent(p.code || p.id)}`;
+  }
+  return productUrl(p);
+}
+
 async function shareProduct(p) {
-  const url = productUrl(p);
+  const url = shareUrl(p);
   const storeName = state.settings.store_name || 'Compassion Market';
   const text = `${p.name}${p.code ? ' (' + p.code + ')' : ''} — ${rupiah(p.effective_price ?? p.price)} di ${storeName}`;
   if (navigator.share) {
@@ -306,6 +306,40 @@ function addToCart(p) {
 }
 
 // ---------- detail + galeri ----------
+// Sebagian penjual mengetik deskripsi sebagai daftar spesifikasi rata satu
+// paragraf, mis. "SPESIFIKASI • Series: TRISTORM • Berat: 285 g • ...".
+// Kalau polanya jelas (banyak segmen "Label: nilai" dipisah "•"), tampilkan
+// sebagai daftar rapi (label di kiri, nilai di kanan) alih-alih satu blok
+// teks padat. Kalau tidak, tampilkan apa adanya (baris baru penjual tetap
+// dihormati lewat white-space:pre-line di CSS).
+function renderDescription(text) {
+  const t = String(text || '').trim();
+  if (!t) return '<p class="desc-text muted">Belum ada deskripsi.</p>';
+  const parts = t.split(/\s*•\s*/).map((s) => s.trim()).filter(Boolean);
+  const specs = [];
+  let heading = '';
+  const lead = [];
+  parts.forEach((part, i) => {
+    const m = part.match(/^([^:]{1,32}):\s*(.+)$/);
+    if (m && parts.length > 1) specs.push([m[1].trim(), m[2].trim()]);
+    else if (i === 0 && parts.length > 1) heading = part;
+    else lead.push(part);
+  });
+  if (specs.length < 3) return `<p class="desc-text">${esc(t)}</p>`;
+  // Spesifikasi bisa sangat panjang (mis. raket tenis) -- default tampilkan ringkas saja,
+  // sisanya baru muncul lewat tombol "Lihat spesifikasi lengkap" (lihat wireSpecToggle()).
+  const PREVIEW = 5;
+  const row = ([k, v]) => `<div class="spec-row"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`;
+  const rest = specs.length - PREVIEW;
+  const more = `Lihat spesifikasi lengkap (${rest} lainnya) ▾`;
+  return `${heading ? `<p class="desc-text desc-heading">${esc(heading)}</p>` : ''}
+    ${lead.length ? `<p class="desc-text">${esc(lead.join(' • '))}</p>` : ''}
+    <dl class="spec-list">${specs.slice(0, PREVIEW).map(row).join('')}${rest > 0
+      ? `<div class="spec-row spec-extra">${specs.slice(PREVIEW).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</div>`
+      : ''}</dl>
+    ${rest > 0 ? `<button type="button" class="spec-toggle" data-more="${esc(more)}" data-less="Sembunyikan spesifikasi ▴">${esc(more)}</button>` : ''}`;
+}
+
 function openDetail(p) {
   const imgs = p.images.length ? p.images.map((i) => imgUrl(i)) : [PLACEHOLDER];
   const m = modal({
@@ -315,7 +349,7 @@ function openDetail(p) {
         ${imgs.length > 1 ? `<div class="gallery-thumbs">${imgs.map((u, i) => `<img src="${esc(u)}" data-i="${i}" class="${i ? '' : 'active'}" alt="Foto ${i + 1}">`).join('')}</div>` : ''}</div>
       <div><div class="eyebrow">${esc(p.category_name || '')}</div><h3 style="margin:6px 0">${esc(p.name)}</h3>
         ${priceBlock(p)}
-        <p class="small muted" style="margin:10px 0">${esc(p.summary || '')}</p>
+        <div class="desc-block">${renderDescription(p.summary)}</div>
         <table class="tbl"><tbody>
           <tr><td class="muted">Kondisi</td><td>${p.condition_pct == null ? 'Konfirmasi penjual' : p.condition_pct + '%'} · ${esc(p.item_condition || '-')}</td></tr>
           <tr><td class="muted">Ukuran</td><td>${esc(p.size || '-')}</td></tr>
@@ -327,7 +361,7 @@ function openDetail(p) {
         </div></div>`,
     actions: [
       { label: 'Tutup' },
-      { label: '🔗 Bagikan', onClick: async () => { await shareProduct(p); return false; } },
+      { label: 'Bagikan', onClick: async () => { await shareProduct(p); return false; } },
       ...(p.stock > 0 ? [{ label: cart.has(p.id) ? 'Lihat keranjang' : '+ Tambah ke keranjang', cls: 'btn-primary', onClick: () => { if (cart.has(p.id)) openCart(); else addToCart(p); } }] : [])
     ]
   });
@@ -335,6 +369,14 @@ function openDetail(p) {
     $('.gallery-main', m.body).src = t.src;
     $$('.gallery-thumbs img', m.body).forEach((x) => x.classList.toggle('active', x === t));
   }));
+  const shareBtn = $$('.modal-foot .btn', m.el).find((b) => b.textContent.trim() === 'Bagikan');
+  if (shareBtn) shareBtn.innerHTML = `${SHARE_ICON}<span>Bagikan</span>`;
+  const specToggle = $('.spec-toggle', m.body);
+  if (specToggle) specToggle.onclick = () => {
+    const list = specToggle.previousElementSibling;
+    const expanded = list.classList.toggle('expanded');
+    specToggle.textContent = expanded ? specToggle.dataset.less : specToggle.dataset.more;
+  };
 }
 
 // ---------- keranjang & checkout ----------
